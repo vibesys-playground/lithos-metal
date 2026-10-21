@@ -91,6 +91,16 @@ def reference(args, ids, save):
 
         emit("embed_tokens.h", h)
         for i, (layer, cache) in enumerate(zip(model.layers, caches, strict=True)):
+            if args.isolated_inputs:
+                if len(boundaries) != 1:
+                    raise ValueError(
+                        "isolated reference requires one whole-prefix chunk"
+                    )
+                source = "embed_tokens.h" if i == 0 else f"layers.{i - 1}.mlp.h"
+                h = mx.array(
+                    load_array(args.isolated_inputs / f"{source}.npy")[None],
+                    dtype=h.dtype,
+                )
             mask = create_attention_mask(
                 h,
                 cache,
@@ -389,6 +399,7 @@ def main():
     p.add_argument("--chunk", type=int, default=32)
     p.add_argument("--compact", action="store_true")
     p.add_argument("--ops", action="store_true")
+    p.add_argument("--isolated-inputs", type=Path)
     p.add_argument("--precision", choices=["bf16", "fp32"], default="bf16")
     p.add_argument("--greedy", action="store_true")
     p.add_argument("--compare-to", type=Path)
