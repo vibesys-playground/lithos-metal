@@ -200,3 +200,30 @@ lockf -k /tmp/flint-gpu.lock env MTL_SHADER_VALIDATION=1 \
    a qualification report whose `qualified` field is false; it has not run.
 4. Shared attention intentionally rejects unsupported draft mixer modes. KV
    storage is full BF16 absolute-position storage, not a ring or quantized cache.
+
+## Continuation plan — 2026-10-21
+
+Starting at `664288cbfc8f` on `flint-model`; three-hour investigation budget.
+
+1. Capture teacher-forced residuals, sub-operations, router sets and logits on
+   all three fixed prefixes, including fixture 2 through divergence index 48.
+   Compare per position, reporting absolute/relative error and cosine; localize
+   changes against the steady accumulation trend.
+2. Measure an independent reference arithmetic envelope using plain rec MLX
+   with BF16 versus FP32 accumulation/ordering, preserving weights and inputs.
+   Derive thresholds from this evidence before judging native results.
+3. Fix any localized error outside that envelope, with a failing-before,
+   passing-after kernel/layer regression and a sweep of sibling mechanisms.
+4. Exercise teacher-forced 1k/4k/16k contexts, sliding window boundaries, full
+   attention without rotary, and learned sinks. Reuse the existing weight pack;
+   investigate extending only rotary auxiliary data in memory beyond 9216.
+5. Publish measured gate data (position margins, bounded logit errors, routing
+   statistics and greedy behavior), fixed outside candidate control, and prove
+   sensitivity with an injected semantic bug. Never qualify by fitting native.
+6. After qualification, smoke actual chat/tool serving and measure three runs
+   each of 1k/8k decode and 8k prefill. Record failures and limitations explicitly.
+
+Every model/Metal command holds `/tmp/flint-gpu.lock` for that command only.
+No `.vibesys/` edits, repack, PR, or branch change. Small commits are pushed
+immediately with the requested coauthor trailer. Diagnostic artifacts stay in
+`.agent-logs/`; reproducible tools and compact evidence are committed.
