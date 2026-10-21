@@ -1,128 +1,132 @@
 # Flint M3 Pro bundle operator handoff
 
-This operator record is outside `.vibesys/tasks/flint-m3pro/`. It is not extra
-task objective text. No VibeSys optimization agents have been launched.
+Operator evidence outside `.vibesys/tasks/flint-m3pro/`. No VibeSys optimization
+agents have been launched. Updated 2026-10-21; measurement is still in progress.
 
-## Implemented
+## Integration
 
-- Repository-native task `flint-m3pro`, `metal`, service interface, dynamic
-  launch instructions, pinned Recursive Flint INT4 identity and hardware facts.
-- Two repeated six-turn coding conversations near 1k, 8k and 32k context;
-  exactly 64 greedy tokens per turn, sequential requests and actual assistant
-  history replay. Continuous usage measures committed-token arrival timing.
-- Protocol v2 objectives: maximize mean decode tok/s across buckets and
-  minimize mean TTFT on turns 2+. Per-bucket spread, overall ranges and
-  standard deviation, whole-command and workload durations are reported.
-  A score requires the whole benchmark to finish within 600 seconds.
-- Self-contained evaluated launcher: build this checkout's native extension
-  with CMake, resolve/hash existing cached checkpoint files, start the candidate
-  module, and clean up its process group on normal/error/termination exits.
-  There is no `[build]` manifest stage, per the host-run limitation.
-- Four semantic probes and exact 32-token greedy pins replayed twice in
-  opposite orders. No threshold/skip/reference override is candidate-controlled.
-- Reference generator reuses template-identical model-port goldens, records
-  early-EOS exclusions, then generates only additional pins needed to reach
-  four. Plain rec `QATModel.native`, explicit unquantized KV caches, no rec
-  megakernel. Reference dependencies match the model-port golden provenance.
-- The VibeSys repository tracks the fork as a shallow `vibesys` submodule,
-  registry `external_repo = true`, with the same lint boundary as other
-  external engines. Integration includes dynamic host support at `7fd3fcf45`.
+The bundle's fork branch is `vibesys`. The original bundle `37d1a9923e5f` now
+includes the port through `16619d9` from `flint-model`. The port remains
+numerically unqualified; its current investigation and eventual gate belong to
+`docs/flint-port-handoff.md`. No accuracy threshold has been changed here.
 
-## Exact-ID server requirement
+Implementation commits include:
 
-Flint emits special tokens, including a thinking marker. Existing lithos-metal
-serving decodes with `skip_special_tokens=True`. Retokenizing response text
-cannot establish equality of the raw greedy sequence. The immutable checker
-therefore requires a top-level `completion_token_ids` array on non-streaming
-Chat Completions responses. It compares all 32 raw IDs, completion usage and
-visible decoded text. This diagnostic must report actual runtime outputs.
-A missing field is a failure, not a text-only fallback. The model-port server
-must implement this extension before the numerical baseline can be valid.
-The bundle does not edit `monolith/` to add it.
+- `c8aa948`: read-only pack reuse, bounded shared-cache policy and raw-ID API.
+- `f7d0dd3`: computed position-table extension without repacking weights.
+- `8b65602`, `9aa08f0`: reduced operator measurement, per-turn logging and
+  failure diagnostics without publishing an invalid score.
+- `d8616e6`: provenance rejection tests and current operator setup.
 
-The conservative baseline launcher also passes `--no-commute-norm`, exposed by
-the model-port branch, to preserve the reference's BF16 rounding order.
+VibeSys uses a fresh worktree on `exp/flint-bundle-2`. A normal merge into
+`exp/flint-lithos-metal` was pushed at `c071783bb62dd70cdfbd4177c2287d84fed45b68`.
+Its current submodule pin is `6e03155`; the final measurement pin will advance.
+No VibeSys `src/` or `libs/` file was changed. No main push, force push or PR.
 
-## Verification completed
+## Disk policy
 
-- 21 hermetic tests pass on Python 3.12: in-process scripted server, fake
-  clock/tokenizer, all stream truncation positions, bad/missing/decreasing
-  usage, dropped output, deadline, history/context and metric arithmetic,
-  strict pin provenance, raw special-token equality, source scan and protocol.
-- Task passes `vibesys validate` and the nine selected registered-example
-  checks, including path references and evaluator-input trust policy.
-- `./scripts/check_format.sh` and `./scripts/check_lint.sh` pass in VibeSys.
-  Task Python passes its own Ruff import/error checks and formatting.
-- Native CMake build succeeds on this Mac. It writes the extension to this
-  checkout's `monolith/runtime`, not another installed source tree.
-- The official VibeSys protocol reader accepts the writer's result row and
-  both required objective names.
-- Real pinned-tokenizer context counts for the targets were 1024, 1279,
-  8191, 8448, 31744 and 31999 with representative previous assistant text.
+`FLINT_PACK_DIR` resolves the existing shared pack. Its documented default is
+`$HOME/.cache/lithos-metal/flint-int4/3b93f9053b530488405ae9fca51d4900d6ce21f0/block-r16-interleaved16-c9216`.
+The only authorized pack key is
+`65dcd02bfffafe7ef9c806b04a40f155ea4690d0111d77e03efff89a53c7ffe9`.
+The launcher checks the key, manifest SHA-256 and complete weight-file size,
+rejects paths in the candidate worktree (including symlink aliases), and
+requires at least 22,736,175,104 bytes plus 2 GiB free before build/model load.
+It always supplies `--pack PATH --pack-read-only`; missing or incompatible
+packs fail without creating directories or packed weights. Target and draft
+paths honor the same read-only option.
 
-## Preflight and launch
+For a future explicitly authorized storage-layout migration,
+`monolith.serving.pack_policy.SharedPackCache` admits a full pack plus margin,
+keys entries by full SHA-256 layout identity, keeps at most one extra pack,
+evicts least-recently-used extras before building, publishes atomically and
+cleans interrupted/failed builds. Its pinned pack is outside the eviction set.
+Callers hold the model execution lock for build/use. No extra pack has been
+created in this continuation, and current authorization still permits only the
+existing pack. Policy and tests use small synthetic files, never real weights.
 
-From the VibeSys checkout, the launch command is:
+The existing pack's F32 rotary tables end at position 9215. The generic pack
+API now permits model-generated F32 leading-axis extensions in memory, only
+when every old value matches bit for bit and trailing dimensions agree. The
+compiler binds new initialized table buffers while preserving read-only weight
+windows. The real 32768-capacity server passed this check. No pack, manifest,
+checkpoint or quantization was rewritten.
 
-```sh
-uv run vibesys --project examples/model-serving/repositories/lithos-metal \
-  --task flint-m3pro --outer-loop dynamic --backend metal --local \
-  --cli-provider codex --model gpt-6.1-sol --max-in-flight 1
-```
+## Serving API
 
-For preflight, insert `preflight` immediately after `vibesys` and use the same
-arguments. Preflight after merging `7fd3fcf45` reports settings valid,
-backend `metal`, and all six dynamic roles; it does not return
-`dynamic_run_environment_unsupported`. It still reports `uses_docker: true`.
-That field does not confirm host execution; the separate dynamic-host handoff
-records an actual scripted host/Seatbelt run. This bundle launches no agents
-and applies no environment workaround.
+Non-streaming Chat Completions accepts optional `return_token_ids: true` and
+returns top-level `completion_token_ids`, the actual committed runtime IDs,
+including special/EOS tokens. Length equals completion usage. Stop-string
+truncation applies consistently. Streaming with the option is rejected. It is
+a model-independent diagnostic documented in `docs/design/serving.md`.
+The immutable checker's HTTP client requests it explicitly. A callback carries
+IDs from the real backend to serialization; no retokenization or shared mutable
+last-response state is used.
 
-Activate the Python 3.12 source-build environment first. `--local` keeps the
-experiment local, not a run-environment selector. Do not pass the unsupported
-`--run-environment local` value.
+## Verification
 
-## Remaining integration and baseline
+- 158 affected fork contract tests passed, including real backend token-ID
+  reporting, cache policy, computed tables and existing serving adapters.
+- 27 hermetic bundle tests passed. Policy cases cover default/env selection,
+  low disk, missing/incomplete packs, worktree aliases, altered identity,
+  read-only reuse, one-extra eviction, builder failure and interrupted builds.
+- Capacity regression fails at `c8aa948` with insufficient context and passes
+  at head; it compiles static/dynamic programs from a tiny 8-position pack for
+  32 positions and checks packed bytes remain unchanged.
+- Existing checker tests reject an injected wrong token even when the normal
+  pins pass. No numerical threshold has been loosened.
+- Touched fork Python passes Ruff E9/F; new/task modules pass import checks.
+  Native CMake build and `tools/ci/hygiene.py` pass. Broader legacy packer lint
+  has pre-existing unused imports, which were not suppressed or changed.
+- VibeSys `check_format.sh`, `check_lint.sh`, task validation and six selected
+  registered-example checks pass. `repoctl test --dry-run` cannot select checks
+  because upstream `HANDOFF-dynamic-host.md` and `HANDOFF-preflight-docker.md`
+  are unowned paths in the experiment's accumulated diff. They were not edited.
+- Current VibeSys preflight reports valid settings, `uses_docker: false`,
+  backend `metal` and all six dynamic roles. This comes from the other agent's
+  merged preflight change. That agent's `HANDOFF-preflight-docker.md` recommends
+  two coding workstreams and one evaluation slot; this task changes no policy.
 
-Do not merge `flint-model` until `docs/flint-port-handoff.md` exists. Then:
+## Real accuracy and performance
 
-1. Merge it into fork branch `vibesys` and read its exact limitations and
-   numerical qualification. Preserve this task's checker and thresholds.
-2. Verify the raw-ID response extension and input-normalization option. The four
-   reference pins are already committed with independent provenance; confirm
-   the port uses the same chat template and raw-ID diagnostic contract.
-3. Reuse a compatible existing pack with `FLINT_PACK_PATH`; check 32768-context
-   compatibility. The observed model-port pack was prepared for 9216 context,
-   so compatibility must not be assumed. Disk space was about 12 GiB after
-   the shared checkpoint and model-port pack; do not create another full pack
-   by default or download another checkpoint copy.
-4. Run the real accuracy checker and benchmark under
-   `lockf -k /tmp/flint-gpu.lock`, record exact failures or the baseline metric
-   row, per-bucket spread, whole wall time and workload time. Never loosen a
-   gate to obtain a baseline. Clean up every owned process.
-5. Re-pin/push the fork SHA in VibeSys and merge/push the implementation branch
-   to `exp/flint-lithos-metal`. Re-run preflight without launching agents.
+Every model/Metal command holds `lockf -k /tmp/flint-gpu.lock` for that command.
+The first accuracy attempt failed before model startup because CMake was not
+on PATH. Activating the source-build environment resolved that prerequisite.
 
-Baseline numbers are not yet claimed: model-port handoff and exact-ID serving
-are prerequisites. The first fallback reference attempt with MLX 0.32.0
-stalled waiting for an MLX GPU event. It was terminated, escalated to SIGKILL,
-and confirmed exited with the lock released. It produced no pins. A successful
-attempt used the port's MLX 0.32.4 / mlx-lm 0.32.2 / Transformers 5.20.2 versions.
-It completed on 2026-10-21 at about 22:48 UTC: four 32-token pins, two reused
-from model-port goldens and two additional code continuations from rec plain
-forward. The reused source SHA-256, versions, excluded early-EOS example and
-independent reference commit are recorded in `reference/pins.json`.
-All owned reference jobs have exited and released the GPU lock.
+The current unchanged accuracy checker then started the actual candidate server
+at 32768 context through the trusted launcher and completed all four semantic
+probes. The first 32-token pin (`port-1`, ocean sentence) passed. The next pin
+(`port-2`, Python sum continuation) failed at zero-based token 22: expected
+3087, received 220. Raw IDs were present and truthful; this is a numerical
+failure, not a missing-extension fallback. The evaluator exited 1 and cleaned
+its server process group. The current port-defined gate specification is still
+pending, so this candidate is not qualified for optimization.
 
-## Final handoff state
+A reduced operator benchmark is queued under the shared lock. It uses one
+repetition, retaining every context bucket and all six turns, and cannot publish
+a VibeSys score. The normal benchmark retains two repetitions and exactly 64
+output tokens per turn. Both preserve per-turn observations; failed runs write
+failure/wall-time diagnostics instead of a result row. Baseline metrics and
+wall times will be filled in after real measurement. No performance score is
+claimed yet.
 
-The model-port branch had no handoff at the final fetch (`6284f3b`), so it was
-not merged. No numerical baseline, decode rate, TTFT or benchmark wall time is
-claimed. The pre-decided next action is to merge that branch only after its
-handoff exists, confirm `completion_token_ids`, and run both real gates with
-a validated compatible pack under the GPU lock. Do not launch VibeSys agents
-until those prerequisites are met.
+## Design and next steps
 
-The original plan was the first fork commit (`b257d4a`) and is removed at
-handoff as requested. The first hermetically passing implementation was
-`6677ce7`, within the initial 45-minute target.
+Disk admission/location belongs to the trusted launcher; atomic shared-cache
+lifetime belongs to the serving cache policy; computed-table compatibility
+belongs to packs and binding belongs to the compiler. The existing dependency
+direction is preserved, without a VibeSys graph edge. The mechanism fixed was
+optional pack selection falling through to automatic unbounded preparation;
+target and draft call sites were swept. Read-only explicit selection was chosen
+over implicit cache fallback. Raw-ID callbacks were chosen over mutable
+backend diagnostics to keep request ownership clear.
+
+Finish reduced then full measurement, retaining all context buckets. If the
+whole benchmark exceeds 600 seconds, reduce repeats/turns and report the exact
+change, without dropping context buckets or disguising startup time. Fetch and
+merge `flint-model` again when it advances. When its handoff publishes the
+accuracy gate, implement that exact specification in the immutable checker,
+including an injected-bug rejection test, then rerun under the lock. Advance
+the VibeSys submodule pin and merge/push normally after a fresh fetch. Keep all
+servers owned and cleaned up; do not launch optimization from an unqualified
+candidate.
