@@ -35,12 +35,45 @@ def reference(args, ids, save):
     mx.set_cache_limit(64 * 1024 * 1024)
     mx.set_wired_limit(mx.device_info()["max_recommended_working_set_size"])
     model = QATModel(args.model).native
+    if args.precision == "fp32":
+        # Integer codes remain unchanged; BF16 scale/bias/norm/router values
+        # widen exactly, and activations/accumulation use FP32 throughout.
+        model.set_dtype(mx.float32)
+        mx.eval(model.parameters())
     caches = [
         KVCache()
         if kind == "full_attention"
         else RotatingKVCache(max_size=model.args.sliding_window, keep=0)
         for kind in model.model.layer_types
     ]
+    if args.greedy:
+        example = json.loads(args.fixture.read_text())["examples"][args.example]
+        prompt = example["prompt_ids"]
+        for start in range(0, len(prompt), args.chunk):
+            logits = model(mx.array([prompt[start : start + args.chunk]]), caches)[
+                :, -1, :
+            ]
+            mx.eval(logits, [cache.state for cache in caches])
+        tokens = []
+        for step in range(len(example["greedy_ids"])):
+            token = int(mx.argmax(logits[0]).item())
+            tokens.append(token)
+            logits = model(mx.array([[token]]), caches)[:, -1, :]
+            mx.eval(logits, [cache.state for cache in caches])
+        mismatches = [
+            i
+            for i, (a, b) in enumerate(zip(tokens, example["greedy_ids"], strict=True))
+            if a != b
+        ]
+        result = {
+            "tokens": tokens,
+            "first_divergence": mismatches[0] if mismatches else None,
+            "mismatch_count": len(mismatches),
+            "total": len(tokens),
+        }
+        (args.arrays / "greedy.json").write_text(json.dumps(result, indent=2) + "\n")
+        print(json.dumps(result), flush=True)
+        return
     boundaries = list(range(0, len(ids), args.chunk))
     if args.golden_schedule:
         prompt_size = len(
@@ -239,7 +272,10 @@ def metrics(name, a, b):
             "per_position_cosine": cosine.tolist(),
         }
         if name == "logits":
-            top = np.argsort(-aa, axis=-1, kind="stable")[:, :2]
+            first = np.argmax(aa, axis=-1)
+            runners = aa.copy()
+            runners[np.arange(len(aa)), first] = -np.inf
+            top = np.column_stack((first, np.argmax(runners, axis=-1)))
             margin = (
                 np.take_along_axis(aa, top[:, :1], -1)[:, 0]
                 - np.take_along_axis(aa, top[:, 1:], -1)[:, 0]
@@ -253,6 +289,14 @@ def metrics(name, a, b):
                 else 0,
                 top1_error_max=float(
                     np.max(np.abs(diff[np.arange(len(aa)), top[:, 0]]))
+                ),
+                top2_gap_error_max=float(
+                    np.max(
+                        np.abs(
+                            diff[np.arange(len(aa)), top[:, 0]]
+                            - diff[np.arange(len(aa)), top[:, 1]]
+                        )
+                    )
                 ),
             )
     return record
@@ -307,6 +351,8 @@ def main():
     p.add_argument("--chunk", type=int, default=32)
     p.add_argument("--compact", action="store_true")
     p.add_argument("--ops", action="store_true")
+    p.add_argument("--precision", choices=["bf16", "fp32"], default="bf16")
+    p.add_argument("--greedy", action="store_true")
     p.add_argument("--compare-to", type=Path)
     p.add_argument("--golden-schedule", action="store_true")
     p.add_argument("--inject", choices=["no-sinks"])
@@ -321,6 +367,7 @@ def main():
     args.arrays.mkdir(parents=True, exist_ok=True)
     (args.arrays / "inputs.json").write_text(json.dumps(ids) + "\n")
     arrays = {}
+    reference_arrays = {}
 
     with (
         open(args.arrays / "comparison.jsonl", "w")
@@ -330,9 +377,15 @@ def main():
 
         def save(start, name, value):
             if args.compare_to:
-                expected = load_array(
-                    args.compare_to / f"{name}.npy", start, start + len(value)
-                )
+                from monolith.formats.fp import bf16_to_f32
+
+                if name not in reference_arrays:
+                    reference_arrays[name] = np.load(
+                        args.compare_to / f"{name}.npy", mmap_mode="r"
+                    )
+                expected = reference_arrays[name][start : start + len(value)]
+                if expected.dtype == np.uint16:
+                    expected = bf16_to_f32(expected)
                 record = dict(position=start, **metrics(name, expected, value))
                 comparisons.write(json.dumps(record) + "\n")
                 comparisons.flush()

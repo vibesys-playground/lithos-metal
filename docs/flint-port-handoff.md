@@ -248,3 +248,31 @@ Across all 72 input positions its max vocabulary error is 2.0, relative L2
 2.25, 0.0175796, and 0.9998552 respectively. These are preliminary evidence,
 not qualification thresholds. Other fixtures, isolated operations, long-context
 checks and injected-bug sensitivity remain required before a gate is declared.
+
+### Calibration rule (fixed before long-context native results)
+
+Use only rec-to-rec measurements to calibrate: canonical BF16, BF16 at alternate
+chunk orderings, and a widened FP32 reference (integer weight codes unchanged;
+BF16 scale/bias, router and normalization parameters widen exactly). Keep all
+positions, including prompt positions; never discard an outlier because native
+misses it. Report each length separately as well as the suite extrema.
+
+For each metric, the proposed conservative acceptance budget is twice the
+largest observed reference-to-reference deviation: absolute and relative L2
+errors, cosine distance `1-cos`, expert overlap loss and exact-set disagreement.
+The factor two is chosen in advance for two independently ordered endpoints;
+it is a measured engineering envelope, not a mathematical bound on arbitrary
+implementations. The margin threshold is twice the maximum measured change in
+the reference top-two logit gap, accompanied by the full-vocabulary error bound
+and routing/hidden-state checks. A margin test alone cannot qualify a model.
+Report the fraction of positions above this threshold so an overly ambiguous
+suite is visible. Strict semantic leaf tests retain their existing two-ULP
+contract independently of these whole-model accumulation budgets.
+
+The final numbers and prompt IDs must be copied into the bundle-owned checker
+and pinned outside the candidate checkout. A candidate must supply neither
+thresholds nor reference traces, and a candidate-authored `qualified` boolean
+is not evidence. The checker must compute metrics itself, reject missing rows,
+non-finite values, changed routing cardinality and provenance/shape mismatches,
+and run a known semantic mutation through the same frozen thresholds. This
+continuation will record whether disabling attention sinks is rejected.
