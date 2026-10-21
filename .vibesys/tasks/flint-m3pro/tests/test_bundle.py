@@ -3,6 +3,7 @@
 Run: python3 -m unittest discover -s .vibesys/tasks/flint-m3pro/tests -v
 No model, Metal, real time, sleep, process, thread or socket is used.
 """
+
 from __future__ import annotations
 
 import json
@@ -11,10 +12,19 @@ import tempfile
 import unittest
 from pathlib import Path
 
-TASK = Path(__file__).resolve().parents[1]
-sys.path[:0] = [str(TASK / "benchmark"), str(TASK / "accuracy_checker")]
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "benchmark"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "accuracy_checker"))
 from checker import PROBES, check_accuracy, load_pins, scan_engine
-from core import OUTPUT_TOKENS, REPEATS, TARGETS, Turn, extend_history, measure, parse_stream, summarize
+from core import (
+    OUTPUT_TOKENS,
+    REPEATS,
+    TARGETS,
+    Turn,
+    extend_history,
+    measure,
+    parse_stream,
+    summarize,
+)
 from launcher import MODEL, REVISION, launch_argv
 from vs_protocol import METRICS, ResultWriter
 
@@ -32,6 +42,7 @@ class FakeClock:
 
 class FakeTokenizer:
     """Reversible text codec; chat framing uses one synthetic token per four characters."""
+
     def ids(self, messages):
         return [ord(c) for c in json.dumps(messages)[::4]]
 
@@ -48,8 +59,10 @@ class FakeTokenizer:
 def frames(prompt_tokens=1024):
     result = [b": keep-alive\n", b"\n"]
     for count in range(1, OUTPUT_TOKENS + 1):
-        frame = {"choices": [{"delta": {"content": "x"}}],
-                 "usage": {"prompt_tokens": prompt_tokens, "completion_tokens": count}}
+        frame = {
+            "choices": [{"delta": {"content": "x"}}],
+            "usage": {"prompt_tokens": prompt_tokens, "completion_tokens": count},
+        }
         result.append(("data: " + json.dumps(frame) + "\n").encode())
     result.append(b'data: {"choices":[{"delta":{},"finish_reason":"length"}]}\n')
     result.append(b"data: [DONE]\n")
@@ -58,6 +71,7 @@ def frames(prompt_tokens=1024):
 
 class ScriptedServer:
     """Sequential server fixture using the real parser and an injected clock."""
+
     def __init__(self, clock, tokenizer, delay=0.1):
         self.clock, self.tokenizer, self.delay = clock, tokenizer, delay
         self.histories = []
@@ -86,18 +100,28 @@ class WorkloadTests(unittest.TestCase):
         self.assertEqual(values.keys(), METRICS.keys())
         self.assertAlmostEqual(values["decode_tokens_per_second"], 10)
         for repeat in range(REPEATS):
-            histories = server.histories[repeat * len(TARGETS):(repeat + 1) * len(TARGETS)]
+            histories = server.histories[repeat * len(TARGETS) : (repeat + 1) * len(TARGETS)]
             for index, history in enumerate(histories):
                 self.assertLessEqual(tokenizer.count(history), TARGETS[index])
                 self.assertGreaterEqual(tokenizer.count(history), TARGETS[index] - 32)
                 if index:
                     self.assertEqual(history[:-2], histories[index - 1])
-                    self.assertEqual(history[-2], {"role": "assistant", "content": "x" * OUTPUT_TOKENS})
+                    self.assertEqual(
+                        history[-2], {"role": "assistant", "content": "x" * OUTPUT_TOKENS}
+                    )
 
     def test_aggregate_equal_weights_buckets_and_repeat_spread(self):
-        rows = [{"repeat": repeat, "turn": turn + 1, "bucket": turn // 2,
-                 "decode_tokens_per_second": 10.0 + repeat + turn // 2, "ttft_s": 0.1 * (turn + 1)}
-                for repeat in range(REPEATS) for turn in range(len(TARGETS))]
+        rows = [
+            {
+                "repeat": repeat,
+                "turn": turn + 1,
+                "bucket": turn // 2,
+                "decode_tokens_per_second": 10.0 + repeat + turn // 2,
+                "ttft_s": 0.1 * (turn + 1),
+            }
+            for repeat in range(REPEATS)
+            for turn in range(len(TARGETS))
+        ]
         values = summarize(rows, 5)
         self.assertEqual(values["decode_tokens_per_second"], 11.5)
         self.assertEqual(values["bucket_2_decode_spread_tokens_per_second"], 1)
@@ -114,6 +138,7 @@ class WorkloadTests(unittest.TestCase):
         class WrongUsage:
             def complete(self, messages, max_tokens):
                 return Turn("x" * OUTPUT_TOKENS, 1, OUTPUT_TOKENS, 1, 1)
+
         with self.assertRaisesRegex(ValueError, "pinned tokenizer"):
             measure(WrongUsage(), FakeTokenizer(), lambda: 0)
 
@@ -134,10 +159,12 @@ class WorkloadTests(unittest.TestCase):
 class StreamTests(unittest.TestCase):
     def parse(self, lines):
         clock = FakeClock()
+
         def stream():
             for line in lines:
                 clock.advance(0.1)
                 yield line
+
         return parse_stream(stream(), clock.now, 0)
 
     def test_valid_stream_and_timing(self):
@@ -153,8 +180,12 @@ class StreamTests(unittest.TestCase):
                 self.parse(stream[:end])
 
     def test_malformed_and_engine_error_frames(self):
-        for line in (b'event: error', b'data: {bad}', b'data: {"error":"OOM"}',
-                     b'data: {"usage":{"completion_tokens":true,"prompt_tokens":1}}'):
+        for line in (
+            b"event: error",
+            b"data: {bad}",
+            b'data: {"error":"OOM"}',
+            b'data: {"usage":{"completion_tokens":true,"prompt_tokens":1}}',
+        ):
             with self.subTest(line=line), self.assertRaises(ValueError):
                 self.parse([line])
 
@@ -177,11 +208,23 @@ class StreamTests(unittest.TestCase):
 class PinTests(unittest.TestCase):
     def payload(self):
         tokenizer = FakeTokenizer()
-        pins = [{"id": str(i), "messages": [{"role": "user", "content": f"code {i}"}],
-                 "prompt_token_ids": tokenizer.ids([{"role": "user", "content": f"code {i}"}]),
-                 "expected_token_ids": tokenizer.encode("x" * 32)} for i in range(4)]
-        return {"version": 1, "model": MODEL, "revision": REVISION, "kv_format": "bf16",
-                "reference": {"commit": "reference-commit"}, "pins": pins}
+        pins = [
+            {
+                "id": str(i),
+                "messages": [{"role": "user", "content": f"code {i}"}],
+                "prompt_token_ids": tokenizer.ids([{"role": "user", "content": f"code {i}"}]),
+                "expected_token_ids": tokenizer.encode("x" * 32),
+            }
+            for i in range(4)
+        ]
+        return {
+            "version": 1,
+            "model": MODEL,
+            "revision": REVISION,
+            "kv_format": "bf16",
+            "reference": {"commit": "reference-commit"},
+            "pins": pins,
+        }
 
     def load(self, payload):
         with tempfile.TemporaryDirectory() as directory:
@@ -190,15 +233,22 @@ class PinTests(unittest.TestCase):
             return load_pins(path)
 
     def server(self, pins, corrupt=False):
-        replies = {json.dumps(messages): answer for (messages, _), answer in
-                   zip(PROBES, ("42", "4", "cobalt-7319", "cedar-west 13"))}
+        replies = {
+            json.dumps(messages): answer
+            for (messages, _), answer in zip(PROBES, ("42", "4", "cobalt-7319", "cedar-west 13"))
+        }
         replies.update({json.dumps(p["messages"]): "x" * 32 for p in pins})
+
         class PinServer:
             def greedy(self, messages, max_tokens):
                 content = replies[json.dumps(messages)]
                 if corrupt and messages == pins[-1]["messages"]:
                     content = "y" + content[1:]
-                return {"choices": [{"message": {"content": content}}], "usage": {"completion_tokens": len(content)}}
+                return {
+                    "choices": [{"message": {"content": content}}],
+                    "usage": {"completion_tokens": len(content)},
+                }
+
         return PinServer()
 
     def test_pins_and_probes_pass_and_any_divergence_fails(self):
@@ -209,8 +259,13 @@ class PinTests(unittest.TestCase):
             check_accuracy(self.server(pins, corrupt=True), FakeTokenizer(), pins)
 
     def test_pin_provenance_and_schema_fail_closed(self):
-        for field, value in (("revision", "wrong"), ("kv_format", "int8"), ("version", 2),
-                             ("pins", []), ("unknown", 1)):
+        for field, value in (
+            ("revision", "wrong"),
+            ("kv_format", "int8"),
+            ("version", 2),
+            ("pins", []),
+            ("unknown", 1),
+        ):
             payload = self.payload()
             payload[field] = value
             with self.subTest(field=field), self.assertRaises(ValueError):
@@ -219,10 +274,12 @@ class PinTests(unittest.TestCase):
             load_pins(Path("missing/pins.json"))
 
     def test_duplicate_and_short_and_bool_ids_fail(self):
-        for mutate in (lambda p: p[0].update(expected_token_ids=[1] * 31),
-                       lambda p: p[0].update(expected_token_ids=[True] * 32),
-                       lambda p: p[0].update(id=p[1]["id"]),
-                       lambda p: p[0].update(messages=p[1]["messages"])):
+        for mutate in (
+            lambda p: p[0].update(expected_token_ids=[1] * 31),
+            lambda p: p[0].update(expected_token_ids=[True] * 32),
+            lambda p: p[0].update(id=p[1]["id"]),
+            lambda p: p[0].update(messages=p[1]["messages"]),
+        ):
             payload = self.payload()
             mutate(payload["pins"])
             with self.assertRaises(ValueError):
@@ -235,8 +292,12 @@ class PinTests(unittest.TestCase):
             check_accuracy(self.server(pins), FakeTokenizer(), pins)
 
     def test_source_scan(self):
-        for source in ("import mlx.core", "from mlx_lm import load", "import rec_mlx",
-                       "import importlib\nimportlib.import_module('mlx_lm')"):
+        for source in (
+            "import mlx.core",
+            "from mlx_lm import load",
+            "import rec_mlx",
+            "import importlib\nimportlib.import_module('mlx_lm')",
+        ):
             with tempfile.TemporaryDirectory() as directory:
                 path = Path(directory)
                 (path / "server.py").write_text(source)
@@ -261,7 +322,9 @@ class ProtocolTests(unittest.TestCase):
                     writer.result(dict.fromkeys(METRICS, 1.0))
                 writer.close()
                 records = [json.loads(s) for s in path.read_text().splitlines()]
-                self.assertEqual([r["kind"] for r in records], ["hello", "error" if fail else "result"])
+                self.assertEqual(
+                    [r["kind"] for r in records], ["hello", "error" if fail else "result"]
+                )
 
     def test_nonfinite_bool_and_unknown_metrics_rejected(self):
         for value in (float("nan"), float("inf"), True):

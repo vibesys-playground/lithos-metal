@@ -4,6 +4,7 @@
 Run with lockf -k /tmp/flint-gpu.lock. Uses rec's plain MLX QATModel.native
 forward, never build_decoder or rec's M4/M5 megakernel. No downloads.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -28,7 +29,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--rec-repo", type=Path, required=True)
     args = parser.parse_args()
-    commit = subprocess.check_output(["git", "-C", str(args.rec_repo), "rev-parse", "HEAD"], text=True).strip()
+    commit = subprocess.check_output(
+        ["git", "-C", str(args.rec_repo), "rev-parse", "HEAD"], text=True
+    ).strip()
     if commit != REC_COMMIT:
         raise ValueError(f"Expected rec commit {REC_COMMIT}, got {commit}")
     sys.path.insert(0, str(args.rec_repo / "engine" / "src"))
@@ -46,11 +49,15 @@ def main() -> None:
         ids = tokenizer.ids(messages)
         # Do not call Model.make_cache(): its full-attention defaults quantize
         # KV. These explicit caches store the BF16 projections without quantization.
-        cache = [KVCache() if kind == "full_attention" else RotatingKVCache(max_size=model.args.sliding_window, keep=0)
-                 for kind in model.model.layer_types]
+        cache = [
+            KVCache()
+            if kind == "full_attention"
+            else RotatingKVCache(max_size=model.args.sliding_window, keep=0)
+            for kind in model.model.layer_types
+        ]
         logits = None
         for start in range(0, len(ids), 128):
-            logits = model(mx.array([ids[start:start + 128]]), cache=cache)
+            logits = model(mx.array([ids[start : start + 128]]), cache=cache)
             mx.eval(logits)
         generated = []
         for _ in range(32):
@@ -60,13 +67,30 @@ def main() -> None:
             mx.eval(logits)
         if tokenizer.encode(tokenizer.decode(generated)) != generated:
             raise ValueError(f"Pin {index} cannot be checked losslessly through text API")
-        pins.append({"id": f"code-{index}", "messages": messages, "prompt_token_ids": ids, "expected_token_ids": generated})
+        pins.append(
+            {
+                "id": f"code-{index}",
+                "messages": messages,
+                "prompt_token_ids": ids,
+                "expected_token_ids": generated,
+            }
+        )
     if any(n.startswith("rec_mlx.kernels") for n in sys.modules):
         raise ValueError("Reference unexpectedly imported megakernel modules")
-    payload = {"version": 1, "model": MODEL, "revision": REVISION, "kv_format": "bf16",
-               "reference": {"repo": "https://github.com/recursive-oss/rec", "commit": commit,
-                             "path": "engine/src/rec_mlx/quantized.py:QATModel.native",
-                             "mlx_version": mx.__version__, "prefill_chunk": 128}, "pins": pins}
+    payload = {
+        "version": 1,
+        "model": MODEL,
+        "revision": REVISION,
+        "kv_format": "bf16",
+        "reference": {
+            "repo": "https://github.com/recursive-oss/rec",
+            "commit": commit,
+            "path": "engine/src/rec_mlx/quantized.py:QATModel.native",
+            "mlx_version": mx.__version__,
+            "prefill_chunk": 128,
+        },
+        "pins": pins,
+    }
     destination = Path(__file__).with_name("pins.json")
     destination.write_text(json.dumps(payload, indent=2) + "\n")
     print(f"Wrote {len(pins)} independent pins to reference/pins.json")

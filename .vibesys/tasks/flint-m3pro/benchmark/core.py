@@ -3,6 +3,7 @@
 No engine imports or I/O. HTTP/clock/tokenizer implementations are injected by
 run.py; tests call this same surface. Errors invalidate the entire measurement.
 """
+
 from __future__ import annotations
 
 import json
@@ -11,7 +12,18 @@ import statistics
 from dataclasses import dataclass
 from typing import Callable, Iterable, Protocol
 
-__all__ = ["TARGETS", "REPEATS", "OUTPUT_TOKENS", "Turn", "Chat", "Tokenizer", "measure", "summarize", "extend_history", "parse_stream"]
+__all__ = [
+    "TARGETS",
+    "REPEATS",
+    "OUTPUT_TOKENS",
+    "Turn",
+    "Chat",
+    "Tokenizer",
+    "measure",
+    "summarize",
+    "extend_history",
+    "parse_stream",
+]
 TARGETS = (1024, 1280, 8192, 8448, 31744, 32000)
 REPEATS = 2
 OUTPUT_TOKENS = 64
@@ -87,12 +99,18 @@ def parse_stream(lines: Iterable[bytes], now: Callable[[], float], started: floa
     if first < started or not all(math.isfinite(v) for v in (first, last, started)):
         raise ValueError("Invalid clock observations")
     cached = usage.get("prompt_tokens_details", {}).get("cached_tokens")
-    if cached is not None and (type(cached) is not int or not 0 <= cached <= usage["prompt_tokens"]):
+    if cached is not None and (
+        type(cached) is not int or not 0 <= cached <= usage["prompt_tokens"]
+    ):
         raise ValueError("Invalid cached_tokens")
-    return Turn("".join(text), usage["prompt_tokens"], OUTPUT_TOKENS, first - started, last - first, cached)
+    return Turn(
+        "".join(text), usage["prompt_tokens"], OUTPUT_TOKENS, first - started, last - first, cached
+    )
 
 
-def extend_history(history: list[dict], target: int, tokenizer: Tokenizer, repeat: int, turn: int) -> list[dict]:
+def extend_history(
+    history: list[dict], target: int, tokenizer: Tokenizer, repeat: int, turn: int
+) -> list[dict]:
     """Append deterministic code-review material to a real conversation near target.
 
     Count the pinned model's actual chat template, not words or server claims.
@@ -122,7 +140,12 @@ def measure(chat: Chat, tokenizer: Tokenizer, now: Callable[[], float]) -> tuple
     """Two sequential growing sessions, one per repeat, with no concurrent requests."""
     rows, started = [], now()
     for repeat in range(REPEATS):
-        history = [{"role": "system", "content": "You are a coding assistant. Review code carefully and explain your reasoning."}]
+        history = [
+            {
+                "role": "system",
+                "content": "You are a coding assistant. Review code carefully and explain your reasoning.",
+            }
+        ]
         for index, target in enumerate(TARGETS):
             if now() - started >= 600:
                 raise ValueError("Benchmark exceeded 600 seconds")
@@ -130,14 +153,24 @@ def measure(chat: Chat, tokenizer: Tokenizer, now: Callable[[], float]) -> tuple
             expected = tokenizer.count(history)
             result = chat.complete(history, OUTPUT_TOKENS)
             if result.prompt_tokens != expected:
-                raise ValueError(f"prompt_tokens={result.prompt_tokens}, pinned tokenizer={expected}")
+                raise ValueError(
+                    f"prompt_tokens={result.prompt_tokens}, pinned tokenizer={expected}"
+                )
             if result.completion_tokens != OUTPUT_TOKENS or not result.text or result.decode_s <= 0:
                 raise ValueError("Incomplete generation")
-            rows.append({"repeat": repeat, "turn": index + 1, "bucket": index // 2,
-                         "target": target, "prompt_tokens": result.prompt_tokens,
-                         "completion_tokens": result.completion_tokens, "ttft_s": result.ttft_s,
-                         "decode_tokens_per_second": (OUTPUT_TOKENS - 1) / result.decode_s,
-                         "cached_tokens": result.cached_tokens})
+            rows.append(
+                {
+                    "repeat": repeat,
+                    "turn": index + 1,
+                    "bucket": index // 2,
+                    "target": target,
+                    "prompt_tokens": result.prompt_tokens,
+                    "completion_tokens": result.completion_tokens,
+                    "ttft_s": result.ttft_s,
+                    "decode_tokens_per_second": (OUTPUT_TOKENS - 1) / result.decode_s,
+                    "cached_tokens": result.cached_tokens,
+                }
+            )
             history.append({"role": "assistant", "content": result.text})
     wall = now() - started
     if wall > 600:
@@ -150,12 +183,16 @@ def summarize(rows: list[dict], wall: float) -> dict[str, float]:
         raise ValueError("Missing turns")
     rates = [r["decode_tokens_per_second"] for r in rows]
     latencies = [r["ttft_s"] * 1000 for r in rows if r["turn"] > 1]
-    values = {"decode_tokens_per_second": statistics.mean(rates),
-              "mean_ttft_turn2plus_ms": statistics.mean(latencies),
-              "decode_min_tokens_per_second": min(rates), "decode_max_tokens_per_second": max(rates),
-              "decode_stdev_tokens_per_second": statistics.stdev(rates),
-              "ttft_turn2plus_min_ms": min(latencies), "ttft_turn2plus_max_ms": max(latencies),
-              "wall_duration_s": wall}
+    values = {
+        "decode_tokens_per_second": statistics.mean(rates),
+        "mean_ttft_turn2plus_ms": statistics.mean(latencies),
+        "decode_min_tokens_per_second": min(rates),
+        "decode_max_tokens_per_second": max(rates),
+        "decode_stdev_tokens_per_second": statistics.stdev(rates),
+        "ttft_turn2plus_min_ms": min(latencies),
+        "ttft_turn2plus_max_ms": max(latencies),
+        "wall_duration_s": wall,
+    }
     for bucket in range(3):
         group = [r["decode_tokens_per_second"] for r in rows if r["bucket"] == bucket]
         values[f"bucket_{bucket}_decode_tokens_per_second"] = statistics.mean(group)

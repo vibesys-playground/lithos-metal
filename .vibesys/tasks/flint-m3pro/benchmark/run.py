@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Trusted evaluator entry point. Run under lockf -k /tmp/flint-gpu.lock."""
+
 from __future__ import annotations
 
 import argparse
@@ -28,7 +29,9 @@ def main() -> int:
             rows, wall = measure(HttpChat(url), tokenizer, time.monotonic)
         values = summarize(rows, wall)
         output = args.output_json or Path(str(args.vs_output) + ".metrics.json")
-        output.write_text(json.dumps({"metrics": values, "turns": rows}, indent=2, allow_nan=False) + "\n")
+        output.write_text(
+            json.dumps({"metrics": values, "turns": rows}, indent=2, allow_nan=False) + "\n"
+        )
         if writer:
             writer.result(values)
         print(json.dumps(values, allow_nan=False))

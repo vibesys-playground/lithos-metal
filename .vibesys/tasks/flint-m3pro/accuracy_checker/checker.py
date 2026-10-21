@@ -4,6 +4,7 @@
 Published functions load_pins/check_accuracy accept a faithful in-process Chat
 and pinned tokenizer. No threshold, alternate reference or skip CLI is offered.
 """
+
 from __future__ import annotations
 
 import ast
@@ -22,13 +23,34 @@ MIN_PINS = 4
 FORBIDDEN = {"mlx", "mlx_lm", "rec", "rec_mlx", "llama_cpp", "ollama", "vllm", "sglang"}
 PROBES = (
     ([{"role": "user", "content": "What is 17 + 25? Reply with only the integer."}], r"\b42\b"),
-    ([{"role": "user", "content": "In Python, what does len([2, 4, 6, 8]) return? Reply with only the integer."}], r"\b4\b"),
-    ([{"role": "user", "content": "Remember the build marker: cobalt-7319."},
-      {"role": "assistant", "content": "I will remember the marker."},
-      {"role": "user", "content": "What was the exact build marker?"}], r"cobalt-7319"),
-    ([{"role": "user", "content": "The deployment region is cedar-west and the shard count is 13."},
-      {"role": "assistant", "content": "Recorded."},
-      {"role": "user", "content": "Repeat the deployment region and shard count."}], r"(?s)(?=.*cedar-west)(?=.*\b13\b)"),
+    (
+        [
+            {
+                "role": "user",
+                "content": "In Python, what does len([2, 4, 6, 8]) return? Reply with only the integer.",
+            }
+        ],
+        r"\b4\b",
+    ),
+    (
+        [
+            {"role": "user", "content": "Remember the build marker: cobalt-7319."},
+            {"role": "assistant", "content": "I will remember the marker."},
+            {"role": "user", "content": "What was the exact build marker?"},
+        ],
+        r"cobalt-7319",
+    ),
+    (
+        [
+            {
+                "role": "user",
+                "content": "The deployment region is cedar-west and the shard count is 13.",
+            },
+            {"role": "assistant", "content": "Recorded."},
+            {"role": "user", "content": "Repeat the deployment region and shard count."},
+        ],
+        r"(?s)(?=.*cedar-west)(?=.*\b13\b)",
+    ),
 )
 
 
@@ -45,7 +67,10 @@ def scan_engine(workspace: Path) -> None:
     """
     for path in workspace.rglob("*.py"):
         relative = path.relative_to(workspace)
-        if any(p.startswith(".") or p in {"tests", "tools", "build", "dist", "__pycache__"} for p in relative.parts):
+        if any(
+            p.startswith(".") or p in {"tests", "tools", "build", "dist", "__pycache__"}
+            for p in relative.parts
+        ):
             continue
         if path.name == "oracle.py":
             continue
@@ -60,20 +85,47 @@ def scan_engine(workspace: Path) -> None:
                 raise ValueError(f"Forbidden serving import in {relative}:{node.lineno}: {names}")
             if isinstance(node, ast.Call) and (
                 (isinstance(node.func, ast.Name) and node.func.id in {"__import__", "exec", "eval"})
-                or (isinstance(node.func, ast.Attribute) and node.func.attr in {"import_module", "run", "Popen", "call", "system", "check_call", "check_output"})
+                or (
+                    isinstance(node.func, ast.Attribute)
+                    and node.func.attr
+                    in {
+                        "import_module",
+                        "run",
+                        "Popen",
+                        "call",
+                        "system",
+                        "check_call",
+                        "check_output",
+                    }
+                )
             ):
-                literals = [n.value for n in ast.walk(node) if isinstance(n, ast.Constant) and isinstance(n.value, str)]
-                if any(re.search(r"\b(mlx[-_]lm|rec_mlx|llama[._-]cpp|ollama)\b", s) for s in literals):
-                    raise ValueError(f"Possible forbidden engine exec/import in {relative}:{node.lineno}")
+                literals = [
+                    n.value
+                    for n in ast.walk(node)
+                    if isinstance(n, ast.Constant) and isinstance(n.value, str)
+                ]
+                if any(
+                    re.search(r"\b(mlx[-_]lm|rec_mlx|llama[._-]cpp|ollama)\b", s) for s in literals
+                ):
+                    raise ValueError(
+                        f"Possible forbidden engine exec/import in {relative}:{node.lineno}"
+                    )
 
 
 def load_pins(path: Path) -> list[dict]:
     if not path.is_file():
-        raise ValueError("Missing reference/pins.json; reuse flint-model goldens or run reference/make_pins.py under GPU lock")
+        raise ValueError(
+            "Missing reference/pins.json; reuse flint-model goldens or run reference/make_pins.py under GPU lock"
+        )
     data = json.loads(path.read_text())
     if set(data) != {"version", "model", "revision", "reference", "kv_format", "pins"}:
         raise ValueError("Unknown/missing pins keys")
-    if (data["version"], data["model"], data["revision"], data["kv_format"]) != (1, MODEL, REVISION, "bf16"):
+    if (data["version"], data["model"], data["revision"], data["kv_format"]) != (
+        1,
+        MODEL,
+        REVISION,
+        "bf16",
+    ):
         raise ValueError("Pins provenance does not match pinned int4 weights and bf16 KV")
     if not isinstance(data["reference"], dict) or not data["reference"].get("commit"):
         raise ValueError("Pins require independent reference commit provenance")
@@ -88,14 +140,22 @@ def load_pins(path: Path) -> list[dict]:
             raise ValueError("Duplicate/invalid pin id")
         seen.add(pin["id"])
         for name in ("prompt_token_ids", "expected_token_ids"):
-            if not isinstance(pin[name], list) or not pin[name] or any(type(n) is not int or n < 0 for n in pin[name]):
+            if (
+                not isinstance(pin[name], list)
+                or not pin[name]
+                or any(type(n) is not int or n < 0 for n in pin[name])
+            ):
                 raise ValueError(f"Invalid pin {pin['id']} {name}")
         if len(pin["expected_token_ids"]) != PIN_LENGTH:
             raise ValueError(f"Pin {pin['id']} must contain exactly {PIN_LENGTH} tokens")
         if not isinstance(pin["messages"], list) or not pin["messages"]:
             raise ValueError("Pin messages must be nonempty")
         for message in pin["messages"]:
-            if set(message) != {"role", "content"} or message["role"] not in {"system", "user", "assistant"} or not isinstance(message["content"], str):
+            if (
+                set(message) != {"role", "content"}
+                or message["role"] not in {"system", "user", "assistant"}
+                or not isinstance(message["content"], str)
+            ):
                 raise ValueError("Invalid pin messages")
     if len({json.dumps(p["messages"], sort_keys=True) for p in pins}) != len(pins):
         raise ValueError("Pins must use distinct prompts")
@@ -130,8 +190,13 @@ def check_accuracy(chat: PinChat, tokenizer: PinnedTokenizer, pins: list[dict]) 
         body = chat.greedy(pin["messages"], PIN_LENGTH)
         got = tokenizer.encode(response_text(body))
         if got != expected or body.get("usage", {}).get("completion_tokens") != PIN_LENGTH:
-            first = next((i for i, (a, b) in enumerate(zip(got, expected)) if a != b), min(len(got), len(expected)))
-            raise ValueError(f"Greedy pin {pin['id']} diverged at token {first}: {got[:PIN_LENGTH]}")
+            first = next(
+                (i for i, (a, b) in enumerate(zip(got, expected)) if a != b),
+                min(len(got), len(expected)),
+            )
+            raise ValueError(
+                f"Greedy pin {pin['id']} diverged at token {first}: {got[:PIN_LENGTH]}"
+            )
     return {"probes_passed": len(PROBES), "pins_passed": len(pins), "repeat_passes": 2}
 
 

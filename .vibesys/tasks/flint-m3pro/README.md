@@ -49,13 +49,13 @@ VibeSys launch, from a VibeSys checkout with this external repository fetched:
 
 ```sh
 uv run vibesys --project examples/model-serving/repositories/lithos-metal \
-  --task flint-m3pro --outer-loop agent --search dynamic \
+  --task flint-m3pro --outer-loop dynamic \
   --backend metal --local --cli-provider codex --model gpt-6.1-sol \
   --max-in-flight 1
 ```
 
-`--local` means reuse the local candidate repository, not a run-environment
-selection. Metal selects the host environment on macOS; do not pass
+`--local` keeps the experiment local and disables publication; it does not
+select a run environment. Metal selects the host environment on macOS; do not pass
 `--run-environment local` (it is not a supported flag value). Run the exact
 same arguments with `vibesys preflight` first. If it returns
 `dynamic_run_environment_unsupported`, stop and wait for the separate

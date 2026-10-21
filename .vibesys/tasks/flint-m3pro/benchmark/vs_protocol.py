@@ -1,4 +1,5 @@
 """Published minimal protocol-v2 writer; sdk/vs-evaluator/PROTOCOL.md owns schema."""
+
 from __future__ import annotations
 
 import json

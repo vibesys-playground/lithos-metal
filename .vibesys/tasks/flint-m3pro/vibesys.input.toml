@@ -3,6 +3,7 @@ backends = ["metal"]
 
 [agent]
 domain = "llm-serving"
+interface = "service"
 
 [accuracy]
 command = ["lockf", "-k", "/tmp/flint-gpu.lock", "python3", "${PROJECT_ROOT}/.vibesys/tasks/flint-m3pro/accuracy_checker/checker.py"]
@@ -22,5 +23,5 @@ count = 1
 vendor = "apple"
 
 [catalogue.model]
-name = "Flint int4"
-maker = "recursive"
+name = "Recursive Flint int4"
+maker = "other"
