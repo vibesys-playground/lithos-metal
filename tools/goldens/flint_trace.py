@@ -249,7 +249,7 @@ def native(args, ids, save):
                 t_this_step=len(chunk), pending_tokens=chunk, prefill_left=1, stop_at=1
             )
             state_buffer.write(session.layout.pack(state), 0)
-            engine.run(1, steps_per_cb=1, in_flight=1)
+            timing = engine.run(1, steps_per_cb=1, in_flight=1)
             for name in names:
                 width = (
                     model.config.vocab_size
@@ -274,7 +274,17 @@ def native(args, ids, save):
                 )
                 value = raw if name.endswith(".ids") else bf16_to_f32(raw)
                 save(start, name, value.reshape(len(chunk), width))
-            print(json.dumps({"position": start, "rows": len(chunk)}), flush=True)
+            print(
+                json.dumps(
+                    {
+                        "position": start,
+                        "rows": len(chunk),
+                        "gpu_ms": timing.gpu_ms,
+                        "wall_ms": timing.wall_ms,
+                    }
+                ),
+                flush=True,
+            )
     finally:
         session.release_engines()
         temporary.cleanup()
@@ -359,7 +369,12 @@ def compare(args):
     ).read_text():
         raise ValueError("comparison requires identical teacher-forced input IDs")
     records = []
-    for path in sorted(args.arrays.glob("*.npy")):
+    paths = sorted(args.arrays.glob("*.npy"))
+    if not paths:
+        raise ValueError(
+            "stored comparison requires array traces; use --compare-to for compressed long traces"
+        )
+    for path in paths:
         a = load_array(path)
         b = load_array(args.other / path.name)
         name = path.stem
@@ -424,7 +439,16 @@ def main():
             raise ValueError("reference trace has incompatible input IDs/row count")
     arrays = {}
     reference_arrays = {}
+    reference_start = None
     seen_rows = {}
+    compressed = args.compact and len(ids) > 4096
+    staged = {}
+    stage_start = None
+
+    def flush_chunk():
+        if staged:
+            np.savez_compressed(args.arrays / f"chunk-{stage_start:06d}.npz", **staged)
+            staged.clear()
 
     with (
         open(args.arrays / "comparison.jsonl", "w")
@@ -433,17 +457,39 @@ def main():
     ) as comparisons:
 
         def save(start, name, value):
+            nonlocal reference_start, stage_start
             if start != seen_rows.get(name, 0):
                 raise ValueError(f"{name}: missing or repeated trace rows at {start}")
             seen_rows[name] = start + len(value)
             if args.compare_to:
                 from monolith.formats.fp import bf16_to_f32
 
-                if name not in reference_arrays:
-                    reference_arrays[name] = np.load(
-                        args.compare_to / f"{name}.npy", mmap_mode="r"
-                    )
-                expected = reference_arrays[name][start : start + len(value)]
+                storage = completed.get("storage", "arrays")
+                if storage == "compressed_chunks":
+                    chunk_start = start // completed["chunk"] * completed["chunk"]
+                    if reference_start != chunk_start:
+                        reference_arrays.clear()
+                        with np.load(
+                            args.compare_to / f"chunk-{chunk_start:06d}.npz"
+                        ) as archive:
+                            reference_arrays.update(
+                                {key: archive[key] for key in archive.files}
+                            )
+                        reference_start = chunk_start
+                    offset = start - chunk_start
+                    expected = reference_arrays[name][offset : offset + len(value)]
+                    if len(expected) != len(value):
+                        raise ValueError(
+                            "comparison chunk straddles reference archive boundary"
+                        )
+                elif storage == "arrays":
+                    if name not in reference_arrays:
+                        reference_arrays[name] = np.load(
+                            args.compare_to / f"{name}.npy", mmap_mode="r"
+                        )
+                    expected = reference_arrays[name][start : start + len(value)]
+                else:
+                    raise ValueError(f"unsupported trace storage: {storage}")
                 if expected.dtype == np.uint16:
                     expected = bf16_to_f32(expected)
                 record = dict(position=start, **metrics(name, expected, value))
@@ -454,6 +500,12 @@ def main():
                 from monolith.formats.fp import f32_to_bf16
 
                 value = f32_to_bf16(value)
+            if compressed:
+                if stage_start != start:
+                    flush_chunk()
+                    stage_start = start
+                staged[name] = value
+                return
             if name not in arrays:
                 arrays[name] = np.lib.format.open_memmap(
                     args.arrays / f"{name}.npy",
@@ -465,6 +517,7 @@ def main():
             arrays[name].flush()
 
         (reference if args.mode == "reference" else native)(args, ids, save)
+        flush_chunk()
     if not args.greedy and (
         not seen_rows or any(rows != len(ids) for rows in seen_rows.values())
     ):
@@ -475,6 +528,13 @@ def main():
                 "mode": args.mode,
                 "precision": args.precision,
                 "chunk": args.chunk,
+                "storage": "comparisons"
+                if args.compare_to
+                else "greedy"
+                if args.greedy
+                else "compressed_chunks"
+                if compressed
+                else "arrays",
                 "rows": len(ids),
                 "input_sha256": input_hash,
                 "tensor_rows": seen_rows,
