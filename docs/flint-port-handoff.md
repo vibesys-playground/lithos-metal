@@ -227,3 +227,24 @@ Every model/Metal command holds `/tmp/flint-gpu.lock` for that command only.
 No `.vibesys/` edits, repack, PR, or branch change. Small commits are pushed
 immediately with the requested coauthor trailer. Diagnostic artifacts stay in
 `.agent-logs/`; reproducible tools and compact evidence are committed.
+
+### Initial teacher-forced evidence (continuation)
+
+`tools/goldens/flint_trace.py` captures every attention/MLP residual, router
+logit and selected expert set, and every vocabulary logit at every input
+position. Input IDs are fixed reference prefixes, including all 64 next-token
+predictions; native predictions never feed back. It supports an exact golden
+schedule (prompt prefill then individual teacher-forced tokens), an alternate
+chunk ordering, compact BF16 traces and streaming comparisons for long contexts.
+The shared weight file is immutable. Beyond its original 9216-position capacity,
+the diagnostic writes only small temporary computed rotary tables, compiling
+against the original matrix slabs and an auxiliary-only table overlay.
+
+Fixture 2 canonical reference reproduces all 64 committed golden next tokens,
+including index 48 logits `[-0.92578125, -1.015625]`. Native teacher-forced
+32-row execution reproduces the prior mismatch (`[-0.97265625, -0.96484375]`).
+Across all 72 input positions its max vocabulary error is 2.0, relative L2
+0.0206952, minimum cosine 0.9998507. Canonical-versus-32-row rec alone gives
+2.25, 0.0175796, and 0.9998552 respectively. These are preliminary evidence,
+not qualification thresholds. Other fixtures, isolated operations, long-context
+checks and injected-bug sensitivity remain required before a gate is declared.
