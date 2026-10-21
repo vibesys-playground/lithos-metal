@@ -133,3 +133,9 @@ shape before mapping, and rejects duplicate names. Views can split stacked
 matrices or reinterpret packed words without copying or changing numerical values.
 A format hint disambiguates packed storage with multiple possible bit widths.
 Packing and oracle loading consume the same views.
+
+Package emitters use the declared `MetalEmitterContext` protocol. In particular,
+`step_state_buffer()` supplies the generation-state binding: static row counts
+do not imply a static position. Generation operations always read live position,
+active rows and stop state. The prefill-to-static-decode cache-preservation test
+checks that a decoder appends after the committed prefix instead of rewriting it.

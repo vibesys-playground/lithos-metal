@@ -184,6 +184,9 @@ class _Ctx:
             m["T_STATIC_ROWS"] = f"{t_c}u"
         return m
 
+    def step_state_buffer(self) -> Tuple[str, int]:
+        return self.program.step_state, 0
+
     def buf(self, v: Value) -> Tuple[str, int]:
         """The ``(buffer, byte offset)`` a value binds to: a view → rows of its base; an input named after a StepState
         field (``tokens`` = ``pending_tokens``, ``anchor`` …) → that field; a pack entry → its window."""

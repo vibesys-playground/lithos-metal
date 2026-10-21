@@ -3,6 +3,8 @@
 import struct
 
 from ... import kernels
+from ...core.ir import Op
+from ..registry import MetalEmitterContext
 
 SOURCE = r"""
 #ifndef STEP_STATE
@@ -63,14 +65,16 @@ kernel void moe_sum(device const ushort* experts [[buffer(0)]], device const flo
 """
 
 
-def emit_route(ctx, op):
+def emit_route(ctx: MetalEmitterContext, op: Op) -> None:
     (logits,) = op.inputs
     ids, weights = op.outputs
     t, _ = ctx.rows_of(op)
     experts, top_k = op.attrs["n_experts"], op.attrs["top_k"]
     if not 1 <= top_k <= min(16, experts) or ctx.shape(logits) != (t, experts):
         raise ValueError("sigmoid_route: invalid logits shape or top_k")
-    k = ctx.kernel("sigmoid_route", kernels.PRELUDE + SOURCE, "sigmoid_route", {})
+    k = ctx.kernel(
+        "sigmoid_route", kernels.PRELUDE + SOURCE, "sigmoid_route", {"STEP_STATE": "1"}
+    )
     params = ctx.params("sigmoid_route", struct.pack("<4I", experts, top_k, t, 0))
     ctx.add(
         k,
@@ -79,6 +83,7 @@ def emit_route(ctx, op):
             (1, *ctx.buf(ids)),
             (2, *ctx.buf(weights)),
             (3, params, 0),
+            (15, *ctx.step_state_buffer()),
         ],
         (t, 1, 1),
         (32, 1, 1),
@@ -87,7 +92,7 @@ def emit_route(ctx, op):
     )
 
 
-def emit_sum(ctx, op):
+def emit_sum(ctx: MetalEmitterContext, op: Op) -> None:
     experts, weights, shared, residual = op.inputs
     (out,) = op.outputs
     t, _ = ctx.rows_of(op)
@@ -99,10 +104,17 @@ def emit_sum(ctx, op):
         or ctx.shape(residual) != (t, hidden)
     ):
         raise ValueError("moe_sum: incompatible expert/weight/shared/residual shapes")
-    k = ctx.kernel("moe_sum", kernels.PRELUDE + SOURCE, "moe_sum", {})
+    k = ctx.kernel("moe_sum", kernels.PRELUDE + SOURCE, "moe_sum", {"STEP_STATE": "1"})
     params = ctx.params("moe_sum", struct.pack("<4I", 0, top_k, t, hidden))
     bindings = [
         (i, *ctx.buf(v))
         for i, v in enumerate([experts, weights, shared, residual, out])
     ]
-    ctx.add(k, [*bindings, (5, params, 0)], (t, 1, 1), (32, 1, 1), op.kind, writes=[4])
+    ctx.add(
+        k,
+        [*bindings, (5, params, 0), (15, *ctx.step_state_buffer())],
+        (t, 1, 1),
+        (32, 1, 1),
+        op.kind,
+        writes=[4],
+    )

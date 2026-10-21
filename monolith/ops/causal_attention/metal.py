@@ -3,6 +3,8 @@
 import struct
 
 from ... import kernels
+from ...core.ir import Op
+from ..registry import MetalEmitterContext
 
 SOURCE = r"""
 #ifndef STEP_STATE
@@ -92,7 +94,7 @@ kernel void causal_attention(device const ushort* proj [[buffer(0)]],
 """
 
 
-def emit(ctx, op):
+def emit(ctx: MetalEmitterContext, op: Op) -> None:
     proj, kc, vc, qn, kn, cos, sin, sinks = op.inputs
     (out,) = op.outputs
     a = op.attrs
@@ -110,6 +112,7 @@ def emit(ctx, op):
     ):
         raise ValueError("causal_attention: incompatible projection/cache/output shape")
     macros = {
+        "STEP_STATE": "1",
         "D": str(d),
         "ROTARY": str(int(a["rotary"])),
         "SINKS": str(int(a["sinks"])),
@@ -124,5 +127,5 @@ def emit(ctx, op):
         (i, *ctx.buf(v))
         for i, v in enumerate([proj, kc, vc, qn, kn, cos, sin, sinks, out])
     ]
-    bindings.append((9, params, 0))
+    bindings.extend([(9, params, 0), (15, *ctx.step_state_buffer())])
     ctx.add(kernel, bindings, (t * heads, 1, 1), (32, 1, 1), op.kind, writes=[1, 2, 8])
