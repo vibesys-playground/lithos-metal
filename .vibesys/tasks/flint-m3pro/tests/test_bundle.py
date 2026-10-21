@@ -140,17 +140,17 @@ class WorkloadTests(unittest.TestCase):
             {
                 "repeat": repeat,
                 "turn": turn + 1,
-                "bucket": turn // 2,
-                "decode_tokens_per_second": 10.0 + repeat + turn // 2,
+                "bucket": turn,
+                "decode_tokens_per_second": 10.0 + repeat + turn,
                 "ttft_s": 0.1 * (turn + 1),
             }
             for repeat in range(REPEATS)
             for turn in range(len(TARGETS))
         ]
         values = summarize(rows, 5)
-        self.assertEqual(values["decode_tokens_per_second"], 11.5)
-        self.assertEqual(values["bucket_2_decode_spread_tokens_per_second"], 1)
-        self.assertAlmostEqual(values["mean_ttft_turn2plus_ms"], 400)
+        self.assertEqual(values["decode_tokens_per_second"], 11.0)
+        self.assertEqual(values["bucket_2_decode_spread_tokens_per_second"], 0)
+        self.assertAlmostEqual(values["mean_ttft_turn2plus_ms"], 250)
         with self.assertRaisesRegex(ValueError, "Missing turns"):
             summarize(rows[:-1], 5)
 

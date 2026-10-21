@@ -57,16 +57,20 @@ never hold it idle. Both evaluator commands acquire it in the manifest.
 
 ## Workload and scoring
 
-`benchmark/run.py` starts a fresh server, then sends two repetitions of a
-single six-turn conversation. Each request carries the actual earlier replies
-and full accumulated history. The next request starts only after completion
-of the previous request; there is no think time or concurrent load. The
-context targets, counted with the pinned tokenizer and chat template, are
-1024, 1280, 8192, 8448, 31744 and 32000 tokens, within 32 tokens below each
-target. Source-review material grows the conversation; paired turns at each
-bucket expose prefix reuse. Repetitions use distinct request text and retain
-the same loaded server to expose laptop noise without paying model startup
-twice. There is no persistent disk prefix cache.
+`benchmark/run.py` starts a fresh server, then sends one three-turn coding
+conversation. Each request carries the actual earlier replies and full
+accumulated history. The next request starts only after completion of the
+previous request; there is no think time or concurrent load. The context
+targets, counted with the pinned tokenizer and chat template, are 1024, 8192
+and 32000 tokens, within 32 tokens below each target. Source-review material
+grows the conversation. There is no persistent disk prefix cache.
+
+The original baseline workload had two repetitions of six turns, with paired
+turns near each bucket. A real reduced run measured 134.26 seconds TTFT at
+1024 tokens before the larger buckets. The operator reduced repetitions to
+one and turns to three, retaining all context buckets, to minimize work under
+the 600-second total budget. A remaining timeout invalidates measurement;
+candidates may not change this workload or omit the long-context request.
 
 Each turn requests exactly 64 greedy output tokens, `temperature=0`, seed 0.
 An early EOS is an invalid measurement; it is not silently padded or ignored.
@@ -77,9 +81,9 @@ Two objectives in `objectives.toml` are ranked:
 
 - Maximize `decode_tokens_per_second`: arithmetic mean of each turn's
   `(64 - 1) / (last token arrival - first token arrival)`, equally weighting
-  the three context buckets and two repetitions. Prefill is excluded.
+  the three context buckets. Prefill is excluded.
 - Minimize `mean_ttft_turn2plus_ms`: mean request-to-first-committed-token
-  latency of turns 2 through 6 across both repetitions. It includes prefix
+  latency of turns 2 and 3. It includes prefix
   lookup, uncached prefill, runtime and HTTP overhead.
 
 The protocol-v2 result includes per-bucket means and ranges, overall decode
@@ -93,8 +97,9 @@ produce a score. `wall_duration_s` reports that interval;
 `workload_duration_s` reports the request workload alone. Throughput and
 TTFT use per-request timings, so startup does not distort those objectives.
 The launcher also has a separate 900-second startup hang guard for the
-accuracy checker. If baseline prefill cannot meet the budget,
-report that failure; do not shorten or silently retune the workload.
+accuracy checker. A command-wide deadline interrupts blocking startup or requests at 600 seconds
+and unwinds through owned-server cleanup. If baseline prefill still cannot meet
+the budget, report that failure; do not silently retune the workload.
 
 ## Candidate contract
 

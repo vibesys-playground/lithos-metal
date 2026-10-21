@@ -24,8 +24,8 @@ __all__ = [
     "extend_history",
     "parse_stream",
 ]
-TARGETS = (1024, 1280, 8192, 8448, 31744, 32000)
-REPEATS = 2
+TARGETS = (1024, 8192, 32000)
+REPEATS = 1
 OUTPUT_TOKENS = 64
 
 
@@ -154,7 +154,7 @@ def measure(
     repeats: int = REPEATS,
     observe: Callable[[dict], None] | None = None,
 ) -> tuple[list[dict], float]:
-    """Two sequential growing sessions, one per repeat, with no concurrent requests."""
+    """One sequential growing session retaining all three context buckets."""
     if not 1 <= repeats <= REPEATS:
         raise ValueError("Invalid benchmark repeat count")
     rows, started = [], now()
@@ -185,7 +185,7 @@ def measure(
                 {
                     "repeat": repeat,
                     "turn": index + 1,
-                    "bucket": index // 2,
+                    "bucket": index,
                     "target": target,
                     "prompt_tokens": result.prompt_tokens,
                     "completion_tokens": result.completion_tokens,

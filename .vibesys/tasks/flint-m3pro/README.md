@@ -41,7 +41,7 @@ python3 -m unittest discover -s .vibesys/tasks/flint-m3pro/tests -v
 lockf -k /tmp/flint-gpu.lock python3 .vibesys/tasks/flint-m3pro/accuracy_checker/checker.py
 lockf -k /tmp/flint-gpu.lock python3 .vibesys/tasks/flint-m3pro/benchmark/run.py \
   --vs-output /tmp/flint-results.jsonl --output-json /tmp/flint-metrics.json
-# Operator-only reduced measurement, without publishing a score:
+# Operator-only measurement, without publishing a score:
 lockf -k /tmp/flint-gpu.lock python3 .vibesys/tasks/flint-m3pro/benchmark/run.py \
   --reduced --output-json /tmp/flint-reduced.json
 ```
