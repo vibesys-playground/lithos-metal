@@ -19,8 +19,9 @@ def extended_tables(pack, tables):
         record = pack.aux[name]
         array = np.asarray(values)
         shape = tuple(record["shape"])
-        if array.nbytes <= record["nbytes"]:
-            continue
+        growing = array.nbytes > record["nbytes"]
+        if not growing and dtype != "F32":
+            continue  # Existing non-F32 packs keep their established validation path.
         if (
             record.get("transform") != "table"
             or dtype != "F32"
@@ -29,14 +30,15 @@ def extended_tables(pack, tables):
             or len(shape) != array.ndim
             or not shape
             or shape[1:] != array.shape[1:]
-            or array.shape[0] <= shape[0]
         ):
             raise ValueError(
                 f"Computed table {name} can only extend F32 positions with unchanged trailing dimensions"
             )
-        if array[: shape[0]].tobytes() != pack.aux_array(name).tobytes():
+        common = min(array.shape[0], shape[0])
+        if array[:common].tobytes() != pack.aux_array(name)[:common].tobytes():
             raise ValueError(
                 f"Computed table {name} disagrees with the packed prefix; use a compatible pack"
             )
-        result[name] = array.tobytes()
+        if growing:
+            result[name] = array.tobytes()
     return result

@@ -86,3 +86,17 @@ def test_compile_large_context_from_small_pack(tmp_path):
             spec = program.buffers["computed." + name]
             assert spec.init == values.tobytes() and spec.file is None
     assert before == {p.name: p.read_bytes() for p in root.iterdir()}
+
+
+@pytest.mark.parametrize("length", [2, 4, 8])
+def test_changed_f32_prefix_is_rejected_at_smaller_equal_and_larger_capacity(
+    tmp_path, length
+):
+    write_safetensors(tmp_path / "empty.safetensors", {})
+    writer = Packer(tmp_path, tmp_path)
+    writer.add_table(TableRequest("positions", np.zeros((4, 2), np.float32), "F32"))
+    writer.write()
+    changed = np.zeros((length, 2), np.float32)
+    changed[0, 1] = 1
+    with pytest.raises(ValueError, match="packed prefix"):
+        extended_tables(PackFile(tmp_path), {"positions": ("F32", changed)})
