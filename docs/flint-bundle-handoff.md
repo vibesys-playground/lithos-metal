@@ -6,7 +6,7 @@ agents have been launched. Updated 2026-10-21; measurement is still in progress.
 ## Integration
 
 The bundle's fork branch is `vibesys`. The original bundle `37d1a9923e5f` now
-includes the port through `16619d9` from `flint-model`. The port remains
+includes the port through `4b708f3` from `flint-model`. The port remains
 numerically unqualified; its current investigation and eventual gate belong to
 `docs/flint-port-handoff.md`. No accuracy threshold has been changed here.
 
@@ -20,7 +20,8 @@ Implementation commits include:
 
 VibeSys uses a fresh worktree on `exp/flint-bundle-2`. A normal merge into
 `exp/flint-lithos-metal` was pushed at `c071783bb62dd70cdfbd4177c2287d84fed45b68`.
-Its current submodule pin is `6e03155`; the final measurement pin will advance.
+A later pin update reached `5f9c4d2d1e` on the experiment branch, pointing to
+`511f7e9`; the final measurement pin will advance.
 No VibeSys `src/` or `libs/` file was changed. No main push, force push or PR.
 
 ## Disk policy
@@ -65,9 +66,12 @@ last-response state is used.
 
 ## Verification
 
-- 158 affected fork contract tests passed, including real backend token-ID
-  reporting, cache policy, computed tables and existing serving adapters.
-- 27 hermetic bundle tests passed. Policy cases cover default/env selection,
+- The initial 158 affected fork contract tests passed. A later expanded run
+  had 164 passes and exposed a pre-existing Ollama queue-duration flake, which
+  assumed a thread started within a real sleep interval. That test now injects
+  a clock and checks nine queue/execution combinations with no sleeps; eleven
+  targeted duration/stream tests pass. The production default clock is unchanged.
+- 30 hermetic bundle tests passed. Policy cases cover default/env selection,
   low disk, missing/incomplete packs, worktree aliases, altered identity,
   read-only reuse, one-extra eviction, builder failure and interrupted builds.
 - Capacity regression fails at `c8aa948` with insufficient context and passes
@@ -102,13 +106,25 @@ failure, not a missing-extension fallback. The evaluator exited 1 and cleaned
 its server process group. The current port-defined gate specification is still
 pending, so this candidate is not qualified for optimization.
 
-A reduced operator benchmark is queued under the shared lock. It uses one
-repetition, retaining every context bucket and all six turns, and cannot publish
-a VibeSys score. The normal benchmark retains two repetitions and exactly 64
-output tokens per turn. Both preserve per-turn observations; failed runs write
-failure/wall-time diagnostics instead of a result row. Baseline metrics and
-wall times will be filled in after real measurement. No performance score is
-claimed yet.
+The initial reduced run used one repetition of the original six turns. It
+completed only the 1024-token turn: TTFT **134.2618 s**, decode **10.5658 tok/s**,
+64 committed output tokens. It was signalled at **629 s**, with approximately
+**632.7 s** whole process wall time including cleanup and excluding the lock
+queue. The second 1280-target turn was incomplete. This run had started before
+the new command-wide deadline was loaded. Its server and process group exited,
+and the lock was released. No score was published.
+
+The scored workload is now one repetition of three turns at **1024, 8192 and
+32000** tokens, still exactly 64 outputs each. Only repeats/turns were reduced;
+all context buckets remain, including the largest target. A full run of that
+minimum workload is queued, using the fresh VibeSys worktree's interpreter and
+its installed serving/build dependencies. The new 600-second command timer
+interrupts blocking startup and requests, unwinds through server cleanup, and
+writes an error row plus partial observations rather than a fabricated score.
+
+[Structured measurements](flint-bundle-measurements.json) records the completed
+turns, the over-budget reduced attempt and the current accuracy failure. No
+valid aggregate baseline or unmeasured long-context throughput is claimed.
 
 ## Design and next steps
 

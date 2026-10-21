@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "model": "RecursiveSI/flint-int4",
+  "revision": "3b93f9053b530488405ae9fca51d4900d6ce21f0",
+  "pack_key": "65dcd02bfffafe7ef9c806b04a40f155ea4690d0111d77e03efff89a53c7ffe9",
+  "accuracy": {
+    "qualified": false,
+    "gate": "unchanged exact 32-token pins, two passes",
+    "semantic_probes_passed": 4,
+    "pins_passed_before_failure": 1,
+    "first_failure": {
+      "pin": "port-2",
+      "token_index": 22,
+      "expected_id": 3087,
+      "actual_id": 220
+    },
+    "port_final_gate_specification": "pending"
+  },
+  "benchmark_runs": [
+    {
+      "id": "reduced-original",
+      "engine_commit": "77ca883",
+      "repeats": 1,
+      "targets": [
+        1024,
+        1280,
+        8192,
+        8448,
+        31744,
+        32000
+      ],
+      "output_tokens_per_turn": 64,
+      "status": "stopped_over_budget",
+      "signalled_at_s": 629,
+      "approx_wall_duration_s": 632.721,
+      "wall_time_note": "Approximate process wall time from process elapsed and final log timestamps; excludes lock queue.",
+      "completed_turns": [
+        {
+          "repeat": 0,
+          "turn": 1,
+          "bucket": 0,
+          "target": 1024,
+          "prompt_tokens": 1024,
+          "completion_tokens": 64,
+          "ttft_s": 134.26182391699695,
+          "decode_tokens_per_second": 10.565792014078003,
+          "cached_tokens": null
+        }
+      ],
+      "incomplete_turn": 2,
+      "score_published": false
+    },
+    {
+      "id": "full-minimum",
+      "repeats": 1,
+      "targets": [
+        1024,
+        8192,
+        32000
+      ],
+      "output_tokens_per_turn": 64,
+      "status": "queued_under_shared_lock",
+      "command_deadline_s": 600
+    }
+  ]
+}
