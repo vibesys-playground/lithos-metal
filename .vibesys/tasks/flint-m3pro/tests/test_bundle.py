@@ -14,6 +14,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "benchmark"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "accuracy_checker"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "reference"))
 from checker import PROBES, check_accuracy, load_pins, scan_engine
 from core import (
     OUTPUT_TOKENS,
@@ -26,6 +27,7 @@ from core import (
     summarize,
 )
 from launcher import MODEL, REVISION, PinnedTokenizer, launch_argv
+from make_pins import REC_COMMIT, reuse_port_goldens
 from vs_protocol import METRICS, ResultWriter
 
 
@@ -369,6 +371,34 @@ class PinTests(unittest.TestCase):
             path = Path(directory)
             (path / "server.py").write_text('"MLX reference may be read."\nimport monolith')
             scan_engine(path)
+
+
+class GoldenReuseTests(unittest.TestCase):
+    def test_reuses_template_identical_pins_and_records_early_eos(self):
+        tokenizer = FakeTokenizer()
+        examples = []
+        for i in range(3):
+            content = f"code {i}"
+            examples.append(
+                {
+                    "prompt": f"<|user|>{content}<|assistant|>",
+                    "prompt_ids": tokenizer.ids([{"role": "user", "content": content}]),
+                    "greedy_ids": [0 if i == 0 else 120] * 64,
+                    "top_logits": [],
+                }
+            )
+        data = {
+            "model": MODEL,
+            "revision": REVISION,
+            "reference": {"commit": REC_COMMIT, "cache": "unquantized KVCache"},
+            "examples": examples,
+        }
+        pins, excluded = reuse_port_goldens(data, tokenizer, [0])
+        self.assertEqual(len(pins), 2)
+        self.assertEqual(excluded, [0])
+        data["examples"][1]["prompt_ids"] = [1]
+        with self.assertRaisesRegex(ValueError, "chat template"):
+            reuse_port_goldens(data, tokenizer, [0])
 
 
 class ProtocolTests(unittest.TestCase):

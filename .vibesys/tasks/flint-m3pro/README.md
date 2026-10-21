@@ -47,14 +47,20 @@ lockf -k /tmp/flint-gpu.lock python3 .vibesys/tasks/flint-m3pro/benchmark/run.py
 
 If no model-port goldens exist, clone the independent rec reference outside
 this repository at commit `e53663b262af4cb1ca498e596ca8b1a2d79e0800`, install
-its plain-model dependencies in a reference-only environment, and generate:
+its plain-model dependencies from `reference/requirements.txt` in a
+reference-only environment, and generate:
 
 ```sh
 lockf -k /tmp/flint-gpu.lock python3 .vibesys/tasks/flint-m3pro/reference/make_pins.py \
   --rec-repo /path/to/rec
 ```
 
-Review and commit the generated pins before any experiment. Do not install rec
+The generator automatically reuses compatible model-port continuations from
+`tests/models/flint/goldens/int4.json`; use `--port-goldens PATH` when the
+port is still in a separate checkout. It records and excludes early-EOS
+examples that cannot satisfy a 32-token request, and generates only enough
+additional independent prompts to reach four pins. It does not weaken the
+32-token gate. Review and commit the generated pins before any experiment. Do not install rec
 as a serving dependency. The reference never uses `Model.make_cache`, whose
 full-attention defaults quantize KV. Pins have fixed provenance and thresholds;
 the task offers no `--skip-pins`, external-server or custom-launch bypass.

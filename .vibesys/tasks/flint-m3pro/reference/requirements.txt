@@ -1,0 +1,5 @@
+# Reference only; do not install rec as a serving dependency.
+# Matches the model-port golden provenance on this machine.
+mlx==0.32.4
+mlx-lm==0.32.2
+transformers==5.20.2

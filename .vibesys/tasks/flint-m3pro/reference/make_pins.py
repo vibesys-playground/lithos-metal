@@ -8,6 +8,8 @@ forward, never build_decoder or rec's M4/M5 megakernel. No downloads.
 from __future__ import annotations
 
 import argparse
+import hashlib
+import importlib.metadata
 import json
 import subprocess
 import sys
@@ -25,9 +27,55 @@ PROMPTS = (
 )
 
 
+def reuse_port_goldens(
+    data: dict, tokenizer: PinnedTokenizer, eos: list[int]
+) -> tuple[list[dict], list[int]]:
+    """Reuse independently generated, template-identical 32-token continuations.
+
+    An early-EOS continuation cannot fill this task's fixed 32-token request;
+    record its exclusion and generate a different prompt rather than padding it.
+    """
+    if set(data) != {"model", "revision", "reference", "examples"}:
+        raise ValueError("Unknown/missing model-port golden keys")
+    if data["model"] != MODEL or data["revision"] != REVISION:
+        raise ValueError("Model-port golden weight identity mismatch")
+    if data["reference"].get("commit") != REC_COMMIT or "unquantized" not in data["reference"].get(
+        "cache", ""
+    ):
+        raise ValueError("Model-port goldens require pinned plain reference and unquantized KV")
+    pins, excluded = [], []
+    for index, example in enumerate(data["examples"]):
+        if set(example) != {"prompt", "prompt_ids", "greedy_ids", "top_logits"}:
+            raise ValueError("Unknown/missing model-port example keys")
+        prompt = example["prompt"]
+        if not prompt.startswith("<|user|>") or not prompt.endswith("<|assistant|>"):
+            raise ValueError("Model-port prompt is not a single-user chat template")
+        messages = [{"role": "user", "content": prompt[len("<|user|>") : -len("<|assistant|>")]}]
+        if tokenizer.ids(messages) != example["prompt_ids"]:
+            raise ValueError("Model-port prompt IDs do not match the served chat template")
+        generated = example["greedy_ids"][:32]
+        if len(generated) != 32 or any(type(t) is not int or t < 0 for t in generated):
+            raise ValueError("Model-port golden lacks 32 raw greedy IDs")
+        if any(t in eos for t in generated):
+            excluded.append(index)
+            continue
+        pins.append(
+            {
+                "id": f"port-{index}",
+                "messages": messages,
+                "prompt_token_ids": example["prompt_ids"],
+                "expected_token_ids": generated,
+            }
+        )
+    return pins, excluded
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--rec-repo", type=Path, required=True)
+    parser.add_argument(
+        "--port-goldens", type=Path, default=Path("tests/models/flint/goldens/int4.json")
+    )
     args = parser.parse_args()
     commit = subprocess.check_output(
         ["git", "-C", str(args.rec_repo), "rev-parse", "HEAD"], text=True
@@ -41,10 +89,26 @@ def main() -> None:
 
     path = model_path()
     tokenizer = PinnedTokenizer.load(path)
-    qat = QATModel(path)
-    model = qat.native
-    pins = []
-    for index, prompt in enumerate(PROMPTS):
+    pins, excluded, reused = [], [], None
+    if args.port_goldens.is_file():
+        data = json.loads(args.port_goldens.read_text())
+        eos = json.loads((path / "config.json").read_text())["eos_token_id"]
+        pins, excluded = reuse_port_goldens(data, tokenizer, eos)
+        reused = {
+            "sha256": hashlib.sha256(args.port_goldens.read_bytes()).hexdigest(),
+            "source": "tests/models/flint/goldens/int4.json",
+            "reference": data["reference"],
+        }
+        print(
+            f"Reused {len(pins)} model-port pins; early-EOS example indexes: {excluded}", flush=True
+        )
+    needed = max(0, 4 - len(pins))
+    mx.set_cache_limit(64 * 1024 * 1024)
+    mx.set_wired_limit(mx.device_info()["max_recommended_working_set_size"])
+    qat = QATModel(path) if needed else None
+    model = qat.native if qat else None
+    for index, prompt in enumerate(PROMPTS[:needed]):
+        print(f"Generating additional code pin {index + 1}/{needed}", flush=True)
         messages = [{"role": "user", "content": prompt}]
         ids = tokenizer.ids(messages)
         # Do not call Model.make_cache(): its full-attention defaults quantize
@@ -86,7 +150,12 @@ def main() -> None:
             "repo": "https://github.com/recursive-oss/rec",
             "commit": commit,
             "path": "engine/src/rec_mlx/quantized.py:QATModel.native",
-            "mlx_version": mx.__version__,
+            "versions": {
+                name: importlib.metadata.version(name) for name in ("mlx", "mlx-lm", "transformers")
+            },
+            "cache": "unquantized KVCache / RotatingKVCache; no megakernel",
+            "reused_port_goldens": reused,
+            "excluded_port_examples_early_eos": excluded,
             "prefill_chunk": 128,
         },
         "pins": pins,
