@@ -1,5 +1,6 @@
 """Trusted pack-location and disk-admission policy. Never writes packed weights."""
 
+import hashlib
 import json
 import shutil
 from pathlib import Path
@@ -28,7 +29,19 @@ def resolve_pack(workspace, env, home, *, free_bytes=None):
         raise ValueError(
             "FLINT_PACK_DIR must name an existing shared pack; automatic packing is disabled"
         )
-    manifest = json.loads((path / "manifest.json").read_text())
+    manifest_bytes = (path / "manifest.json").read_bytes()
+    key_file = path / "pack-key.json"
+    if not key_file.is_file():
+        raise ValueError("Shared pack is missing pack-key.json storage provenance")
+    metadata = json.loads(key_file.read_text())
+    if metadata.get("key") != PACK_KEY:
+        raise ValueError("FLINT_PACK_DIR does not name the authorized shared pack key")
+    if (
+        metadata.get("identity", {}).get("manifest_sha256")
+        != hashlib.sha256(manifest_bytes).hexdigest()
+    ):
+        raise ValueError("Shared pack manifest does not match its storage identity")
+    manifest = json.loads(manifest_bytes)
     if (path / "weights.pack").stat().st_size != manifest["nbytes"]:
         raise ValueError("Shared weights.pack is incomplete")
     # Reserve space even on cache hits: a future explicit layout migration must

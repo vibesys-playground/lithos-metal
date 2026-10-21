@@ -47,7 +47,9 @@ class Turn:
     cached_tokens: int | None = None
 
 
-def parse_stream(lines: Iterable[bytes], now: Callable[[], float], started: float) -> Turn:
+def parse_stream(
+    lines: Iterable[bytes], now: Callable[[], float], started: float
+) -> Turn:
     """Parse one streamed completion, requiring completion, usage and exactly 64 tokens.
 
     Continuous usage timestamps committed token availability, including tokens
@@ -104,7 +106,12 @@ def parse_stream(lines: Iterable[bytes], now: Callable[[], float], started: floa
     ):
         raise ValueError("Invalid cached_tokens")
     return Turn(
-        "".join(text), usage["prompt_tokens"], OUTPUT_TOKENS, first - started, last - first, cached
+        "".join(text),
+        usage["prompt_tokens"],
+        OUTPUT_TOKENS,
+        first - started,
+        last - first,
+        cached,
     )
 
 
@@ -125,7 +132,10 @@ def extend_history(
     low, high, best = 0, len(code), None
     while low <= high:
         middle = (low + high) // 2
-        candidate = [*history, {"role": "user", "content": intro + code[:middle] + ending}]
+        candidate = [
+            *history,
+            {"role": "user", "content": intro + code[:middle] + ending},
+        ]
         count = tokenizer.count(candidate)
         if count <= target:
             best, low = candidate, middle + 1
@@ -136,10 +146,19 @@ def extend_history(
     return best
 
 
-def measure(chat: Chat, tokenizer: Tokenizer, now: Callable[[], float]) -> tuple[list[dict], float]:
+def measure(
+    chat: Chat,
+    tokenizer: Tokenizer,
+    now: Callable[[], float],
+    *,
+    repeats: int = REPEATS,
+    observe: Callable[[dict], None] | None = None,
+) -> tuple[list[dict], float]:
     """Two sequential growing sessions, one per repeat, with no concurrent requests."""
+    if not 1 <= repeats <= REPEATS:
+        raise ValueError("Invalid benchmark repeat count")
     rows, started = [], now()
-    for repeat in range(REPEATS):
+    for repeat in range(repeats):
         history = [
             {
                 "role": "system",
@@ -156,7 +175,11 @@ def measure(chat: Chat, tokenizer: Tokenizer, now: Callable[[], float]) -> tuple
                 raise ValueError(
                     f"prompt_tokens={result.prompt_tokens}, pinned tokenizer={expected}"
                 )
-            if result.completion_tokens != OUTPUT_TOKENS or not result.text or result.decode_s <= 0:
+            if (
+                result.completion_tokens != OUTPUT_TOKENS
+                or not result.text
+                or result.decode_s <= 0
+            ):
                 raise ValueError("Incomplete generation")
             rows.append(
                 {
@@ -171,6 +194,8 @@ def measure(chat: Chat, tokenizer: Tokenizer, now: Callable[[], float]) -> tuple
                     "cached_tokens": result.cached_tokens,
                 }
             )
+            if observe is not None:
+                observe(rows[-1])
             history.append({"role": "assistant", "content": result.text})
     wall = now() - started
     if wall > 600:
@@ -178,8 +203,10 @@ def measure(chat: Chat, tokenizer: Tokenizer, now: Callable[[], float]) -> tuple
     return rows, wall
 
 
-def summarize(rows: list[dict], wall: float) -> dict[str, float]:
-    if len(rows) != REPEATS * len(TARGETS):
+def summarize(
+    rows: list[dict], wall: float, *, repeats: int = REPEATS
+) -> dict[str, float]:
+    if len(rows) != repeats * len(TARGETS):
         raise ValueError("Missing turns")
     rates = [r["decode_tokens_per_second"] for r in rows]
     latencies = [r["ttft_s"] * 1000 for r in rows if r["turn"] > 1]
@@ -197,7 +224,12 @@ def summarize(rows: list[dict], wall: float) -> dict[str, float]:
     for bucket in range(3):
         group = [r["decode_tokens_per_second"] for r in rows if r["bucket"] == bucket]
         values[f"bucket_{bucket}_decode_tokens_per_second"] = statistics.mean(group)
-        values[f"bucket_{bucket}_decode_spread_tokens_per_second"] = max(group) - min(group)
-    if any(type(v) not in (int, float) or not math.isfinite(v) or v < 0 for v in values.values()):
+        values[f"bucket_{bucket}_decode_spread_tokens_per_second"] = max(group) - min(
+            group
+        )
+    if any(
+        type(v) not in (int, float) or not math.isfinite(v) or v < 0
+        for v in values.values()
+    ):
         raise ValueError("Nonfinite or negative metric")
     return values

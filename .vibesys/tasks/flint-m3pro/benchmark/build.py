@@ -26,7 +26,15 @@ def main() -> None:
         timeout=120,
     )
     subprocess.run(
-        ["cmake", "--build", "build/flint-task", "--config", "Release", "--parallel", "2"],
+        [
+            "cmake",
+            "--build",
+            "build/flint-task",
+            "--config",
+            "Release",
+            "--parallel",
+            "2",
+        ],
         check=True,
         timeout=300,
     )

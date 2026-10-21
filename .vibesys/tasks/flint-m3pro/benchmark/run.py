@@ -9,7 +9,7 @@ import sys
 import time
 from pathlib import Path
 
-from core import measure, summarize
+from core import REPEATS, measure, summarize
 from launcher import HttpChat, PinnedTokenizer, model_path, server_endpoint
 from vs_protocol import ResultWriter
 
@@ -18,17 +18,38 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--vs-output", type=Path)
     parser.add_argument("--output-json", type=Path)
+    parser.add_argument(
+        "--reduced",
+        action="store_true",
+        help="Operator smoke run: one repetition, all context buckets; no score",
+    )
     args = parser.parse_args()
+    if args.reduced and args.vs_output is not None:
+        parser.error("--reduced cannot publish a VibeSys score")
     if args.vs_output is None and args.output_json is None:
         parser.error("--vs-output or --output-json is required")
+    repeats = 1 if args.reduced else REPEATS
     writer = ResultWriter(args.vs_output) if args.vs_output else None
     started = time.monotonic()
     try:
         path = model_path()
         tokenizer = PinnedTokenizer.load(path)
         with server_endpoint(Path.cwd(), path) as url:
-            rows, wall = measure(HttpChat(url), tokenizer, time.monotonic)
-        values = summarize(rows, wall)
+
+            def observe(row):
+                print(json.dumps({"turn": row}, allow_nan=False), flush=True)
+                if args.output_json:
+                    with args.output_json.with_suffix(".turns.jsonl").open("a") as log:
+                        log.write(json.dumps(row, allow_nan=False) + "\n")
+
+            rows, wall = measure(
+                HttpChat(url),
+                tokenizer,
+                time.monotonic,
+                repeats=repeats,
+                observe=observe,
+            )
+        values = summarize(rows, wall, repeats=repeats)
         total_wall = time.monotonic() - started
         if total_wall > 600:
             raise ValueError(
@@ -37,7 +58,12 @@ def main() -> int:
         values["wall_duration_s"] = total_wall
         output = args.output_json or Path(str(args.vs_output) + ".metrics.json")
         output.write_text(
-            json.dumps({"metrics": values, "turns": rows}, indent=2, allow_nan=False) + "\n"
+            json.dumps(
+                {"metrics": values, "turns": rows, "reduced": args.reduced},
+                indent=2,
+                allow_nan=False,
+            )
+            + "\n"
         )
         if writer:
             writer.result(values)

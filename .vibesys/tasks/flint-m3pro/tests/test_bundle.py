@@ -105,15 +105,35 @@ class WorkloadTests(unittest.TestCase):
         self.assertEqual(values.keys(), METRICS.keys())
         self.assertAlmostEqual(values["decode_tokens_per_second"], 10)
         for repeat in range(REPEATS):
-            histories = server.histories[repeat * len(TARGETS) : (repeat + 1) * len(TARGETS)]
+            histories = server.histories[
+                repeat * len(TARGETS) : (repeat + 1) * len(TARGETS)
+            ]
             for index, history in enumerate(histories):
                 self.assertLessEqual(tokenizer.count(history), TARGETS[index])
                 self.assertGreaterEqual(tokenizer.count(history), TARGETS[index] - 32)
                 if index:
                     self.assertEqual(history[:-2], histories[index - 1])
                     self.assertEqual(
-                        history[-2], {"role": "assistant", "content": "x" * OUTPUT_TOKENS}
+                        history[-2],
+                        {"role": "assistant", "content": "x" * OUTPUT_TOKENS},
                     )
+
+    def test_reduced_operator_run_preserves_all_context_buckets(self):
+        clock, tokenizer = FakeClock(), FakeTokenizer()
+        observed = []
+        rows, wall = measure(
+            ScriptedServer(clock, tokenizer),
+            tokenizer,
+            clock.now,
+            repeats=1,
+            observe=observed.append,
+        )
+        self.assertEqual(observed, rows)
+        self.assertEqual([row["target"] for row in rows], list(TARGETS))
+        self.assertEqual(len(rows), len(TARGETS))
+        self.assertAlmostEqual(
+            summarize(rows, wall, repeats=1)["decode_tokens_per_second"], 10
+        )
 
     def test_aggregate_equal_weights_buckets_and_repeat_spread(self):
         rows = [
@@ -170,8 +190,12 @@ class WorkloadTests(unittest.TestCase):
                 return {"input_ids": tokens} if return_dict else tokens
 
         tokenizer = PinnedTokenizer(TemplateTokenizer())
-        self.assertEqual(tokenizer.ids([{"role": "user", "content": "review code"}]), [1, 2, 3])
-        self.assertEqual(tokenizer.count([{"role": "user", "content": "review code"}]), 3)
+        self.assertEqual(
+            tokenizer.ids([{"role": "user", "content": "review code"}]), [1, 2, 3]
+        )
+        self.assertEqual(
+            tokenizer.count([{"role": "user", "content": "review code"}]), 3
+        )
 
     def test_launcher_uses_candidate_and_fixed_numerics(self):
         argv = launch_argv(Path("checkpoint"), 1234, Path("shared-pack"))
@@ -245,7 +269,9 @@ class PinTests(unittest.TestCase):
             {
                 "id": str(i),
                 "messages": [{"role": "user", "content": f"code {i}"}],
-                "prompt_token_ids": tokenizer.ids([{"role": "user", "content": f"code {i}"}]),
+                "prompt_token_ids": tokenizer.ids(
+                    [{"role": "user", "content": f"code {i}"}]
+                ),
                 "expected_token_ids": tokenizer.encode("x" * 32),
             }
             for i in range(4)
@@ -268,7 +294,9 @@ class PinTests(unittest.TestCase):
     def server(self, pins, corrupt=False):
         replies = {
             json.dumps(messages): answer
-            for (messages, _), answer in zip(PROBES, ("42", "4", "cobalt-7319", "cedar-west 13"))
+            for (messages, _), answer in zip(
+                PROBES, ("42", "4", "cobalt-7319", "cedar-west 13")
+            )
         }
         replies.update({json.dumps(p["messages"]): "x" * 32 for p in pins})
 
@@ -311,7 +339,9 @@ class PinTests(unittest.TestCase):
                     if messages == pin["messages"]:
                         ids = list(pin["expected_token_ids"])
                         body["completion_token_ids"] = ids
-                        body["choices"][0]["message"]["content"] = SpecialTokenizer().visible(ids)
+                        body["choices"][0]["message"]["content"] = (
+                            SpecialTokenizer().visible(ids)
+                        )
                         body["usage"]["completion_tokens"] = 32
                         if self.corrupt and ids[0] == 0:
                             body["completion_token_ids"] = [1, *ids[1:]]
@@ -375,7 +405,9 @@ class PinTests(unittest.TestCase):
                     scan_engine(path)
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory)
-            (path / "server.py").write_text('"MLX reference may be read."\nimport monolith')
+            (path / "server.py").write_text(
+                '"MLX reference may be read."\nimport monolith'
+            )
             scan_engine(path)
 
 
@@ -422,7 +454,8 @@ class ProtocolTests(unittest.TestCase):
                 writer.close()
                 records = [json.loads(s) for s in path.read_text().splitlines()]
                 self.assertEqual(
-                    [r["kind"] for r in records], ["hello", "error" if fail else "result"]
+                    [r["kind"] for r in records],
+                    ["hello", "error" if fail else "result"],
                 )
 
     def test_nonfinite_bool_and_unknown_metrics_rejected(self):

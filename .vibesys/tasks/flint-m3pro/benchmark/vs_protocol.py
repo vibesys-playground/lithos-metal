@@ -18,7 +18,10 @@ METRICS = {
     "wall_duration_s": {"unit": "s"},
     "workload_duration_s": {"unit": "s"},
     **{f"bucket_{i}_decode_tokens_per_second": {"unit": "tok/s"} for i in range(3)},
-    **{f"bucket_{i}_decode_spread_tokens_per_second": {"unit": "tok/s"} for i in range(3)},
+    **{
+        f"bucket_{i}_decode_spread_tokens_per_second": {"unit": "tok/s"}
+        for i in range(3)
+    },
 }
 
 
@@ -35,7 +38,9 @@ class ResultWriter:
     def result(self, values: dict[str, float]) -> None:
         if self.finished or values.keys() != METRICS.keys():
             raise ValueError("Duplicate result or mismatched metric schema")
-        if any(type(v) not in (int, float) or not math.isfinite(v) for v in values.values()):
+        if any(
+            type(v) not in (int, float) or not math.isfinite(v) for v in values.values()
+        ):
             raise ValueError("Metrics must be finite numbers")
         self.write({"kind": "result", "values": values})
         self.finished = True

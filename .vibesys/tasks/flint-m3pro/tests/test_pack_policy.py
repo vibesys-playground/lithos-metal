@@ -1,5 +1,6 @@
 """Hermetic launch policy: no model, process or Metal work."""
 
+import hashlib
 import json
 import sys
 import tempfile
@@ -7,7 +8,28 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "benchmark"))
-from pack_policy import MARGIN_BYTES, PACK_BYTES, default_pack_dir, resolve_pack
+from pack_policy import (
+    MARGIN_BYTES,
+    PACK_BYTES,
+    PACK_KEY,
+    default_pack_dir,
+    resolve_pack,
+)
+
+
+def write_identity(pack):
+    (pack / "pack-key.json").write_text(
+        json.dumps(
+            {
+                "key": PACK_KEY,
+                "identity": {
+                    "manifest_sha256": hashlib.sha256(
+                        (pack / "manifest.json").read_bytes()
+                    ).hexdigest()
+                },
+            }
+        )
+    )
 
 
 class PackPolicyTests(unittest.TestCase):
@@ -18,6 +40,7 @@ class PackPolicyTests(unittest.TestCase):
             pack.mkdir(parents=True)
             (pack / "manifest.json").write_text(json.dumps({"nbytes": 3}))
             (pack / "weights.pack").write_bytes(b"abc")
+            write_identity(pack)
             before = {
                 p.name: (p.read_bytes(), p.stat().st_mtime_ns) for p in pack.iterdir()
             }
@@ -73,5 +96,6 @@ class PackPolicyTests(unittest.TestCase):
             pack.mkdir(parents=True)
             (pack / "manifest.json").write_text(json.dumps({"nbytes": 4}))
             (pack / "weights.pack").write_bytes(b"abc")
+            write_identity(pack)
             with self.assertRaisesRegex(ValueError, "incomplete"):
                 resolve_pack(home / "worktree", {}, home, free_bytes=2**60)
