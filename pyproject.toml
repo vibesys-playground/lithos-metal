@@ -29,6 +29,7 @@ serve = ["fastapi>=0.115", "pydantic>=2.9", "uvicorn>=0.30", "transformers>=5.0"
 include = ["monolith*"]
 
 [tool.setuptools.package-data]
+"monolith.models.flint" = ["chat_template.jinja"]
 "monolith.backends.metal" = ["*/config*.json", "*/recipes/*/*.json"]
 
 [tool.pytest.ini_options]

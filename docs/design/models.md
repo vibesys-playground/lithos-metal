@@ -82,3 +82,18 @@ A draft retains checkpoint-owned embedding/head weights and shares target module
 
 The published heads are quantized checkpoint conversions; their presence is not a claim of additional
 fine-tuning or a universal acceptance rate. See [speculative decoding](speculative-decoding.md).
+
+## Flint correctness candidate
+
+The `flint` package registers `FlintForCausalLM` for RecursiveSI/flint-int4.
+It validates the pinned affine checkpoint layout, composes plain RMSNorm,
+parameterized causal attention and sigmoid-routed experts with an ungated shared
+expert, and preserves the INT4 projections/head and affine INT8 embedding.
+The independent oracle tools load rec's plain MLX model with unquantized KV;
+the engine has no rec or MLX runtime dependency.
+
+This candidate is **not numerically qualified**. The first 64-token fixture
+matches, but the second first diverges at token index 48. Qualification stopped
+without changing comparisons. Serving and performance baselines were not run.
+See `docs/flint-port-handoff.md` and `docs/flint-port-qualification.json` for
+provenance, margins, verification and the shared pack location.

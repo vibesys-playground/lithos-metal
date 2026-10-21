@@ -92,3 +92,15 @@ Format: `<path in this repo>` — adapted from / copied from `<repo>` `<path>` @
   confident-prefix rule) follow `deepspec/modeling/dspark/qwen3/modeling.py`, `deepspec/modeling/dspark/markov_head.py`
   and `deepspec/eval/dspark/draft_ops.py` (MIT); written against them, no code copied; the oracle test imports the
   reference implementation from a local checkout to compare against.
+
+## Recursive (recursive-oss/rec, Apache-2.0)
+
+- `monolith/models/flint/`, `monolith/nn/causal_attention.py`,
+  `monolith/nn/sigmoid_moe.py` — independently implemented model composition
+  and arithmetic informed by `engine/src/rec_mlx/model.py` and `quantized.py`
+  at `e53663b262af4cb1ca498e596ca8b1a2d79e0800`; no fused-engine code used.
+- `monolith/models/flint/chat_template.jinja` — copied from the
+  RecursiveSI/flint-int4 checkpoint at
+  `3b93f9053b530488405ae9fca51d4900d6ce21f0` (Apache-2.0).
+- `tools/goldens/flint_golden.py` loads the separately checked-out reference
+  implementation for independent oracle evidence; it is not a runtime dependency.

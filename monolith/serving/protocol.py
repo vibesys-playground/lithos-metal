@@ -230,6 +230,21 @@ def streaming_text(content, request):
 
 
 def tool_payload(payload, request):
+    payload = payload.strip()
+    if payload and payload[0] not in ('{', '<'):
+        match = re.fullmatch(r'([^<\s]+)\s*((?:<arg_key>.*?</arg_key>\s*<arg_value>.*?</arg_value>\s*)*)', payload, re.S)
+        if not match:
+            raise ValueError('invalid key/value tool call')
+        name, body = match.groups()
+        schema = next((t.function.parameters for t in request.tools or [] if t.function.name == name), {})
+        arguments = {}
+        for key, value in re.findall(r'<arg_key>(.*?)</arg_key>\s*<arg_value>(.*?)</arg_value>', body, re.S):
+            if key in arguments:
+                raise ValueError('duplicate parameter')
+            arguments[key] = parameter_value(value, schema.get('properties', {}).get(key, {}))
+        if set(schema.get('required', [])) - arguments.keys():
+            raise ValueError('missing required parameters')
+        return {'name': name, 'arguments': arguments}
     if not payload.startswith('<function='):
         return json.loads(payload)
     match = FUNCTION_BLOCK.fullmatch(payload.strip())

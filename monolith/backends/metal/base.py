@@ -20,7 +20,13 @@ class MetalBackend:
         return shared_compile(*args, **kwargs)
 
     def handler(self, kind, shared_handlers):
-        return shared_handlers[kind]
+        if kind in shared_handlers:
+            return shared_handlers[kind]
+        from ...ops import OPS
+        emitter = OPS.get(kind).metal_emitter
+        if emitter is None:
+            raise KeyError(f"op {kind!r} has no Metal emitter")
+        return emitter
 
     def direct_attention_shape(self, ctx, heads, kv, d, t, lm_mode, qk_norm):
         """Additional shapes eligible for the explicit direct-cache attention route."""

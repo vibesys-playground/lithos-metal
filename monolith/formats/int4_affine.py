@@ -22,32 +22,42 @@ pairs (before 2026-09-26) records ``scale_unit_bytes`` 8 and is refused by the d
 
 from __future__ import annotations
 
-from typing import Any, Mapping, Tuple
+from collections.abc import Mapping
+from typing import Any
 
 import numpy as np
 
 from .base import DequantSpec, Format, PackLayout
-from .blm import LANES, PackInfo, join_lanes, lane_groups, pack_blm, split_lanes, unpack_blm
+from .blm import (
+    LANES,
+    PackInfo,
+    join_lanes,
+    lane_groups,
+    pack_blm,
+    split_lanes,
+    unpack_blm,
+)
 from .fp import bf16_to_f32, f32_to_bf16, pack_nibbles, unpack_nibbles
 from .registry import register_format
 
 GROUP = 64
 
 
-def _lane_groups(k: int, group: int) -> Tuple[np.ndarray, np.ndarray, int]:
+def _lane_groups(k: int, group: int) -> tuple[np.ndarray, np.ndarray, int]:
     """Per lane: the first group its stripe touches and how many (``blm.lane_groups``); K % 256 for the decode kernels."""
     if k % 256:
-        raise ValueError(f"int4_affine: K must be a multiple of 256 (K={k})")
+        raise ValueError(f"affine: K must be a multiple of 256 (K={k})")
     return lane_groups(k, group)
 
 
 @register_format("int4_affine")
 class INT4Affine(Format):
+    bits = 4
     bytes_per_weight = 0.5 + 4.0 / GROUP
     weights_per_word = 32
     scale_group = GROUP
     pack_k_multiple = 256
-    scale_unit_bytes = 4            # a 16-bit (scale, bias) pair per group: scale in the low half, bias in the high; BF16 or F16 (SCALE_F16)
+    scale_unit_bytes = 4  # a 16-bit (scale, bias) pair per group: scale in the low half, bias in the high; BF16 or F16 (SCALE_F16)
     msl_decode = """
 #define WEIGHTS_PER_WORD 32u
 #define SCALE_GROUP 64u
@@ -70,22 +80,50 @@ static inline float decode_bias(thread const uint* sw, uint g) { return as_type<
 #endif
 """
 
-    def unpack(self, tensors: Mapping[str, Any], *, shape: Tuple[int, int]) -> DequantSpec:
+    def unpack(
+        self, tensors: Mapping[str, Any], *, shape: tuple[int, int]
+    ) -> DequantSpec:
         n, k = shape
         w = np.asarray(tensors["weight"])
-        if w.dtype != np.uint32 or w.shape != (n, k // 8) or k % 8:
-            raise ValueError(f"int4_affine: weight {w.shape} {w.dtype} does not match shape {shape}")
+        if (
+            w.dtype != np.uint32
+            or w.shape != (n, k // (32 // self.bits))
+            or k % (32 // self.bits)
+        ):
+            raise ValueError(
+                f"{self.name}: weight {w.shape} {w.dtype} does not match shape {shape}"
+            )
         sc, bi = _to_f32(tensors["scales"]), _to_f32(tensors["biases"])
         if sc.shape != bi.shape or sc.shape[0] != n or k % sc.shape[1]:
-            raise ValueError(f"int4_affine: scales {sc.shape} / biases {bi.shape} do not match shape {shape}")
+            raise ValueError(
+                f"{self.name}: scales {sc.shape} / biases {bi.shape} do not match shape {shape}"
+            )
         group = k // sc.shape[1]
-        return DequantSpec("int4_affine", (n, k), {"weight": np.ascontiguousarray(w.view(np.uint8).reshape(n, k // 2)),
-                                                  "scales": sc, "biases": bi}, {"group": group, "pair_dtype": _pair_dtype(tensors["scales"], tensors["biases"], sc, bi)})
+        return DequantSpec(
+            self.name,
+            (n, k),
+            {
+                "weight": np.ascontiguousarray(
+                    w.view(np.uint8).reshape(n, k * self.bits // 8)
+                ),
+                "scales": sc,
+                "biases": bi,
+            },
+            {
+                "group": group,
+                "pair_dtype": _pair_dtype(tensors["scales"], tensors["biases"], sc, bi),
+            },
+        )
 
     def dequantize(self, spec: DequantSpec) -> np.ndarray:
         n, k = spec.shape
         g = int(spec.params["group"])
-        codes = unpack_nibbles(spec.tensors["weight"]).astype(np.float32).reshape(n, k // g, g)
+        raw = spec.tensors["weight"]
+        codes = (
+            (unpack_nibbles(raw) if self.bits == 4 else raw)
+            .astype(np.float32)
+            .reshape(n, k // g, g)
+        )
         sc = spec.tensors["scales"].astype(np.float32).reshape(n, k // g, 1)
         bi = spec.tensors["biases"].astype(np.float32).reshape(n, k // g, 1)
         return (codes * sc + bi).reshape(n, k).astype(np.float32)
@@ -102,61 +140,125 @@ static inline float decode_bias(thread const uint* sw, uint g) { return as_type<
         w = np.asarray(w, dtype=np.float32)
         n, k = w.shape
         if k % group:
-            raise ValueError(f"int4_affine: K must be a multiple of the group ({group})")
+            raise ValueError(
+                f"{self.name}: K must be a multiple of the group ({group})"
+            )
         blocks = w.reshape(n, k // group, group)
         w_min = blocks.min(axis=-1)
         w_max = np.maximum(blocks.max(axis=-1), np.float32(0))
-        scale = np.maximum((w_max - w_min) / np.float32(15), np.float32(1e-7)).astype(np.float32)
+        scale = np.maximum(
+            (w_max - w_min) / np.float32((1 << self.bits) - 1), np.float32(1e-7)
+        ).astype(np.float32)
         side = np.abs(w_min) > np.abs(w_max)
         scale = np.where(side, scale, -scale).astype(np.float32)
         edge = np.where(side, w_min, w_max).astype(np.float32)
         q0 = _round_away(edge / scale)
         at_zero = q0 == 0
-        scale = np.where(at_zero, scale, edge / np.where(at_zero, np.float32(1), q0)).astype(np.float32)
+        scale = np.where(
+            at_zero, scale, edge / np.where(at_zero, np.float32(1), q0)
+        ).astype(np.float32)
         bias = np.where(at_zero, np.float32(0), edge).astype(np.float32)
-        codes = np.clip(_round_away((blocks - bias[..., None]) / scale[..., None]), 0, 15).astype(np.uint8).reshape(n, k)
-        scale, bias = bf16_to_f32(f32_to_bf16(scale)), bf16_to_f32(f32_to_bf16(bias))          # the pack's (and mlx's) BF16 pairs
-        return DequantSpec("int4_affine", (n, k), {"weight": pack_nibbles(codes), "scales": scale, "biases": bias}, {"group": group, "pair_dtype": "bf16"})
+        codes = (
+            np.clip(
+                _round_away((blocks - bias[..., None]) / scale[..., None]),
+                0,
+                (1 << self.bits) - 1,
+            )
+            .astype(np.uint8)
+            .reshape(n, k)
+        )
+        scale, bias = (
+            bf16_to_f32(f32_to_bf16(scale)),
+            bf16_to_f32(f32_to_bf16(bias)),
+        )  # the pack's (and mlx's) BF16 pairs
+        return DequantSpec(
+            self.name,
+            (n, k),
+            {
+                "weight": pack_nibbles(codes) if self.bits == 4 else codes,
+                "scales": scale,
+                "biases": bias,
+            },
+            {"group": group, "pair_dtype": "bf16"},
+        )
 
-    def _lanes(self, spec: DequantSpec) -> Tuple[np.ndarray, np.ndarray]:
+    def _lanes(self, spec: DequantSpec) -> tuple[np.ndarray, np.ndarray]:
         n, k = spec.shape
         g = int(spec.params["group"])
-        payload = split_lanes(spec.tensors["weight"], k, 1, 2)                          # [N, 32, K/64] (a ragged stripe: not whole words)
+        payload = split_lanes(
+            spec.tensors["weight"], k, 1, 8 // self.bits
+        )  # [N, 32, K/64] (a ragged stripe: not whole words)
         first, count, gpl = _lane_groups(k, g)
-        pairs = np.zeros((n, LANES, gpl, 2), np.float32)                                # the (scale, bias) of every group a lane touches
+        pairs = np.zeros(
+            (n, LANES, gpl, 2), np.float32
+        )  # the (scale, bias) of every group a lane touches
         for lane in range(LANES):
             gs = slice(int(first[lane]), int(first[lane] + count[lane]))
             pairs[:, lane, : count[lane], 0] = spec.tensors["scales"][:, gs]
             pairs[:, lane, : count[lane], 1] = spec.tensors["biases"][:, gs]
         if _spec_pair_dtype(spec) == "f16":
-            scales = np.ascontiguousarray(pairs.astype(np.float16)).view(np.uint8).reshape(n, LANES, gpl * 4)   # F16 pairs: scale, bias
+            scales = (
+                np.ascontiguousarray(pairs.astype(np.float16))
+                .view(np.uint8)
+                .reshape(n, LANES, gpl * 4)
+            )  # F16 pairs: scale, bias
         else:
-            scales = np.ascontiguousarray(f32_to_bf16(pairs)).view(np.uint8).reshape(n, LANES, gpl * 4)      # BF16 pairs: scale, bias
+            scales = (
+                np.ascontiguousarray(f32_to_bf16(pairs))
+                .view(np.uint8)
+                .reshape(n, LANES, gpl * 4)
+            )  # BF16 pairs: scale, bias
         return payload, scales
 
-    def pack(self, spec: DequantSpec, layout: PackLayout) -> Tuple[bytes, PackInfo]:
-        n, k = spec.shape
+    def pack(self, spec: DequantSpec, layout: PackLayout) -> tuple[bytes, PackInfo]:
+        _n, k = spec.shape
         g = int(spec.params["group"])
         if g != GROUP:
-            raise ValueError(f"int4_affine: the kernel decode is compiled for groups of {GROUP}, the checkpoint uses {g}")
+            raise ValueError(
+                f"{self.name}: the kernel decode is compiled for groups of {GROUP}, the checkpoint uses {g}"
+            )
         payload, scales = self._lanes(spec)
-        return pack_blm(payload, scales, layout, format="int4_affine", k=k, scale_group=GROUP, scale_dtype=_spec_pair_dtype(spec))
+        return pack_blm(
+            payload,
+            scales,
+            layout,
+            format=self.name,
+            k=k,
+            scale_group=GROUP,
+            scale_dtype=_spec_pair_dtype(spec),
+        )
 
     def unpack_pack(self, data: bytes, info: PackInfo) -> DequantSpec:
         payload, scales = unpack_blm(data, info)
         n, k = info.n, info.k
         first, count, gpl = _lane_groups(k, GROUP)
         if info.scale_unit_bytes and info.scale_unit_bytes != self.scale_unit_bytes:
-            raise ValueError(f"int4_affine: the pack keeps {info.scale_unit_bytes}-byte scale pairs (FP32, before 2026-09-26): re-pack it")
+            raise ValueError(
+                f"{self.name}: the pack keeps {info.scale_unit_bytes}-byte scale pairs (FP32, before 2026-09-26): re-pack it"
+            )
         dtype = info.scale_dtype or "bf16"
         raw = np.ascontiguousarray(scales).view(np.uint16)
-        pairs = (raw.view(np.float16).astype(np.float32) if dtype == "f16" else bf16_to_f32(raw)).reshape(n, LANES, gpl, 2)
-        sc, bi = np.zeros((n, k // GROUP), np.float32), np.zeros((n, k // GROUP), np.float32)
-        for lane in range(LANES):                                                       # a group shared by two lanes is stored twice, identically
+        pairs = (
+            raw.view(np.float16).astype(np.float32)
+            if dtype == "f16"
+            else bf16_to_f32(raw)
+        ).reshape(n, LANES, gpl, 2)
+        sc, bi = (
+            np.zeros((n, k // GROUP), np.float32),
+            np.zeros((n, k // GROUP), np.float32),
+        )
+        for lane in range(
+            LANES
+        ):  # a group shared by two lanes is stored twice, identically
             gs = slice(int(first[lane]), int(first[lane] + count[lane]))
             sc[:, gs] = pairs[:, lane, : count[lane], 0]
             bi[:, gs] = pairs[:, lane, : count[lane], 1]
-        return DequantSpec("int4_affine", (n, k), {"weight": join_lanes(payload), "scales": sc, "biases": bi}, {"group": GROUP, "pair_dtype": dtype})
+        return DequantSpec(
+            self.name,
+            (n, k),
+            {"weight": join_lanes(payload), "scales": sc, "biases": bi},
+            {"group": GROUP, "pair_dtype": dtype},
+        )
 
 
 def _spec_pair_dtype(spec: DequantSpec) -> str:
@@ -166,11 +268,17 @@ def _spec_pair_dtype(spec: DequantSpec) -> str:
 def _exact_in(values: np.ndarray, dtype: str) -> bool:
     """Every value survives the round trip through ``dtype`` (bf16 or f16) unchanged."""
     v = np.asarray(values, np.float32)
-    back = bf16_to_f32(f32_to_bf16(v)) if dtype == "bf16" else v.astype(np.float16).astype(np.float32)
+    back = (
+        bf16_to_f32(f32_to_bf16(v))
+        if dtype == "bf16"
+        else v.astype(np.float16).astype(np.float32)
+    )
     return bool(np.array_equal(back, v))
 
 
-def _pair_dtype(raw_scales: Any, raw_biases: Any, sc: np.ndarray, bi: np.ndarray) -> str:
+def _pair_dtype(
+    raw_scales: Any, raw_biases: Any, sc: np.ndarray, bi: np.ndarray
+) -> str:
     """The 16-bit dtype the pack keeps the (scale, bias) pairs in: the checkpoint's own where it is 16-bit (BF16 as
     uint16 bit patterns from the reader, F16 as float16); FP32 pairs whichever of the two holds them exactly, BF16
     first; refused when neither does — the pack must dequantize to the checkpoint's reference to the bit."""
@@ -182,20 +290,22 @@ def _pair_dtype(raw_scales: Any, raw_biases: Any, sc: np.ndarray, bi: np.ndarray
     for dtype in ("bf16", "f16"):
         if _exact_in(sc, dtype) and _exact_in(bi, dtype):
             return dtype
-    raise ValueError("int4_affine: the checkpoint's FP32 scales / biases are representable in neither BF16 nor F16 — the pack keeps 16-bit "
-                     "pairs; re-quantize the matrix at pack time (pack_weights.py --quantize int4_affine) or convert the checkpoint")
+    raise ValueError(
+        "int4_affine: the checkpoint's FP32 scales / biases are representable in neither BF16 nor F16 — the pack keeps 16-bit "
+        "pairs; re-quantize the matrix at pack time (pack_weights.py --quantize int4_affine) or convert the checkpoint"
+    )
 
 
 def _round_away(x: np.ndarray) -> np.ndarray:
     """Metal's ``round``: to nearest, halves away from zero (numpy's ``rint`` takes halves to even)."""
     x = np.asarray(x, dtype=np.float32)
     t = np.trunc(x)
-    half = np.abs(x - t) == np.float32(0.5)                      # exact: x − trunc(x) is exact below 2^23
+    half = np.abs(x - t) == np.float32(0.5)  # exact: x − trunc(x) is exact below 2^23
     return np.where(half, t + np.sign(x), np.rint(x)).astype(np.float32)
 
 
 def _to_f32(a: Any) -> np.ndarray:
     a = np.asarray(a)
-    if a.dtype == np.uint16:                                  # a BF16 bit pattern from the safetensors reader
+    if a.dtype == np.uint16:  # a BF16 bit pattern from the safetensors reader
         return bf16_to_f32(a)
     return a.astype(np.float32)

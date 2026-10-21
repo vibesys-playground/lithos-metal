@@ -32,10 +32,11 @@ class ServingAssets:
     recipe_key: str | None = None
     prefill_chunk_size: int | None = None
     draft_sampling: str = 'argmax'
+    commute_norm: bool = True
 
     def options(self, prompt_tokens):
         profile = copy.deepcopy(self.profile)
-        options = dict(profile=profile, max_context=self.capacity)
+        options = dict(profile=profile, max_context=self.capacity, commute_norm=self.commute_norm)
         key = None
         if self.draft_dir:
             options.update(drafter_dir=str(self.draft_dir), drafter_pack=str(self.draft_pack),
@@ -139,4 +140,5 @@ def prepare(args, *, device_info=None):
              profile.backend, model_dir, draft_dir, gamma + 1 if gamma else 1, sorted(recipes))
     return ServingAssets(model_dir, pack, args.max_context, capacity, profile,
                          draft_dir, draft_pack, gamma, recipes, args.kernel_config_key,
-                         backend.serving_prefill_chunk(recipes, model), getattr(args, 'draft_sampling', 'argmax'))
+                         backend.serving_prefill_chunk(recipes, model), getattr(args, 'draft_sampling', 'argmax'),
+                         not getattr(args, 'no_commute_norm', False))

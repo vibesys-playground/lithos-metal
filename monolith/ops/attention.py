@@ -17,5 +17,5 @@ docs/design/mixers.md#full-attention.
 from ..core.ir import OpClass
 from .registry import KernelBinding, OpDef, register_op
 
-GQA_DECODE = register_op(OpDef("gqa_decode", OpClass.MAP, "heads").bind("*", KernelBinding("gqa_decode")))
+GQA_DECODE = register_op(OpDef("gqa_decode", OpClass.MAP, "heads", cache_input=1).bind("*", KernelBinding("gqa_decode")))
 GQA_MERGE = register_op(OpDef("gqa_merge", OpClass.MAP, "heads").bind("*", KernelBinding("gqa_merge")))

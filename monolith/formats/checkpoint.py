@@ -17,7 +17,7 @@ class TensorGroup:
     format: str = ""                            # "nvfp4" | "fp8_e4m3" | "int4_affine" | "bf16" | "f32" | ""
 
 
-def group_tensors(names: Iterable[str], dtypes: Mapping[str, str]) -> Dict[str, TensorGroup]:
+def group_tensors(names: Iterable[str], dtypes: Mapping[str, str], formats: Mapping[str, str] | None = None) -> Dict[str, TensorGroup]:
     """``{base: TensorGroup}`` for every ``<base>.weight`` with its ``weight_scale*`` / ``input_scale`` siblings."""
     names = list(names)
     groups: Dict[str, TensorGroup] = {}
@@ -32,7 +32,7 @@ def group_tensors(names: Iterable[str], dtypes: Mapping[str, str]) -> Dict[str, 
                 if base in groups:
                     groups[base].sides[side] = n
     for g in groups.values():
-        g.format = detect_format(g, dtypes)
+        g.format = (formats or {}).get(g.weight) or detect_format(g, dtypes)
     return groups
 
 
@@ -58,6 +58,8 @@ def logical_shape(g: TensorGroup, shapes: Mapping[str, Tuple[int, ...]]) -> Opti
     sh = tuple(shapes[g.weight])
     if g.format == "nvfp4":
         return sh[:-1] + (sh[-1] * (8 if "weight_scale_2" not in g.sides else 2),)   # MLX packs 8 codes per U32, ModelOpt 2 per U8
+    if g.format == "int8_affine":
+        return sh[:-1] + (sh[-1] * 4,)
     if g.format == "int4_affine":
         return sh[:-1] + (sh[-1] * 8,)
     return sh

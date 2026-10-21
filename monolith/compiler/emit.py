@@ -184,6 +184,9 @@ class _Ctx:
             m["T_STATIC_ROWS"] = f"{t_c}u"
         return m
 
+    def step_state_buffer(self) -> Tuple[str, int]:
+        return self.program.step_state, 0
+
     def buf(self, v: Value) -> Tuple[str, int]:
         """The ``(buffer, byte offset)`` a value binds to: a view → rows of its base; an input named after a StepState
         field (``tokens`` = ``pending_tokens``, ``anchor`` …) → that field; a pack entry → its window."""
@@ -1326,6 +1329,8 @@ def _moe_gemv(ctx: _Ctx, op: Op) -> None:
     if ctx.shape(y)[1] != top_k * n_out:
         raise ValueError(f"moe_gemv {w.name}: the output has {ctx.shape(y)[1]} columns, expected {top_k} × {n_out}")
     macros = dict(kernels.gemv_macros(info, t=1, epilogue=epilogue, out_bf16=True, pairs=(top_k, expert_rows // info.rows, x_slot)), **ctx.t_macros(t_c, t_src))
+    if op.attrs.get("round_silu"):
+        macros["SILU_ROUND"] = "1"
     k = ctx.kernel(f"gemv_T|{info.format}", kernels.gemv_source(info.format), "gemv_T", macros)
     n_sg, grid, tg = ctx.geometry("crew", expert_rows // info.rows)
     prm = ctx.params("moe_gemv", kernels.gemv_params(expert_rows, expert_rows // info.rows, n_sg, t_c))
@@ -1465,7 +1470,9 @@ def _context_capacity(ctx: _Ctx, g: Graph) -> Tuple[int, int]:
     (γ − 1: the block's last query sits at position + γ − 1). 0 = unbounded (no attention op). The serial ops stop
     the program (error 2) at a step whose first position reaches the capacity, so no kernel writes past a cache;
     ``Session.generate`` refuses a request that cannot fit before it starts."""
-    target = [ctx.shape(op.inputs[1])[0] for op in g.ops if op.kind == "gqa_decode"]
+    from ..ops import OPS
+    target = [ctx.shape(op.inputs[od.cache_input])[0] for op in g.ops
+              if (od := OPS.resolve(op.kind)) is not None and od.cache_input is not None]
     draft = [ctx.shape(op.inputs[2])[0] - int(op.attrs.get("gamma", 1)) + 1 for op in g.ops if op.kind == "draft_attn"]
     cap_t = min(target) if target else 0
     caps = [c for c in (cap_t, min(draft) if draft else 0) if c > 0]

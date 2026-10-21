@@ -104,3 +104,38 @@ All GPU loops are bounded.
 
 Adapted code retains its license headers and provenance in [third_party/NOTICE](../../third_party/NOTICE).
 The repository's hygiene and model-extension checks enforce the standalone and modularity rules.
+
+### Package-owned Metal operations
+
+An `OpDef` may provide `metal_emitter(ctx, op)` for a registered native operation.
+The common backend uses it when the operation has no built-in handler. A binding
+is still mandatory, and the coverage guard still checks the selected profile.
+The emitter declares every written binding. `cache_input` identifies a target
+cache input whose leading dimension constrains generation capacity; the compiler
+derives that limit from the operation contract instead of a model name.
+
+`ops/causal_attention` implements QK-normalized causal GQA with an explicit window
+(0 for unbounded history), optional rotary positions and optional per-head learned
+softmax sinks. It appends BF16 K/V by absolute position. A sink adds denominator
+mass and has zero value. Disabled rotary/sink inputs are never read. Its shared
+`nn.CausalAttention` layer composes ordinary packed projections and residuals.
+
+`ops/sigmoid_moe` defines sigmoid top-k routing and separately rounded mixture
+summation. `nn.SigmoidMoE` reuses expert projections and adds an ungated shared
+expert. Existing softmax routing and gated shared experts keep their contracts.
+Expert projections explicitly select separate SiLU rounding where required.
+
+### Checkpoint storage views
+
+A model may declare `checkpoint_views(info)`, yielding typed `TensorInfo` byte
+views. The reader applies renaming first, validates every view's byte range and
+shape before mapping, and rejects duplicate names. Views can split stacked
+matrices or reinterpret packed words without copying or changing numerical values.
+A format hint disambiguates packed storage with multiple possible bit widths.
+Packing and oracle loading consume the same views.
+
+Package emitters use the declared `MetalEmitterContext` protocol. In particular,
+`step_state_buffer()` supplies the generation-state binding: static row counts
+do not imply a static position. Generation operations always read live position,
+active rows and stop state. The prefill-to-static-decode cache-preservation test
+checks that a decoder appends after the committed prefix instead of rewriting it.

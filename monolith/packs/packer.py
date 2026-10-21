@@ -74,13 +74,13 @@ class TableRequest:
 
 
 class Packer:
-    def __init__(self, checkpoint: str | Path, out_dir: str | Path, rename=None, adapt=None) -> None:
-        self.ckpt = SafetensorsDir(checkpoint, rename=rename, adapt=adapt)
+    def __init__(self, checkpoint: str | Path, out_dir: str | Path, rename=None, adapt=None, views=None) -> None:
+        self.ckpt = SafetensorsDir(checkpoint, rename=rename, adapt=adapt, views=views)
         self.out = Path(out_dir)
         self.out.mkdir(parents=True, exist_ok=True)
         self.dtypes = {n: self.ckpt.info(n).dtype for n in self.ckpt.names()}
         self.shapes = {n: self.ckpt.info(n).shape for n in self.ckpt.names()}
-        self.groups = group_tensors(self.ckpt.names(), self.dtypes)
+        self.groups = group_tensors(self.ckpt.names(), self.dtypes, {n: self.ckpt.info(n).format for n in self.ckpt.names()})
         self._slabs: List[Dict[str, Any]] = []
         self._aux: List[Dict[str, Any]] = []
         self._fh = open(self.out / "weights.pack", "wb")

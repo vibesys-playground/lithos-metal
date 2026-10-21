@@ -6,6 +6,6 @@ template uses (design §5.5). Importing this package registers ``nvfp4``, ``fp8_
 from .base import DequantSpec, Format, PackLayout
 from .blm import PackInfo, pack_blm, unpack_blm
 from .registry import FORMATS, register_format
-from . import bf16, fp8_e4m3, int4_affine, int8, nvfp4  # noqa: F401  (registration)
+from . import bf16, fp8_e4m3, int4_affine, int8, int8_affine, nvfp4  # noqa: F401  (registration)
 
 __all__ = ["DequantSpec", "Format", "PackLayout", "PackInfo", "pack_blm", "unpack_blm", "FORMATS", "register_format"]
