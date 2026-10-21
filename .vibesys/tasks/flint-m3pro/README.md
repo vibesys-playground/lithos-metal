@@ -27,7 +27,7 @@ the pinned checkpoint's `flint-int4.json`. Personal paths are not committed.
 Weight validation is outside per-request timing but inside the whole benchmark
 wall-time budget. Both whole-command and request-workload durations are reported.
 
-`FLINT_PACK_PATH` may point to a compatible existing lithos-metal pack or the
+`FLINT_PACK_DIR` may point to a compatible existing lithos-metal pack or the
 shared pack-cache directory. The launcher passes it as `--pack`; lithos-metal
 validates compatibility. Otherwise the engine uses its default cache under
 `$XDG_CACHE_HOME/lithos-metal/packs` (or the normal user cache). Reuse the

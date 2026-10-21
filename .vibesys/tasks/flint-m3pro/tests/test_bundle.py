@@ -174,7 +174,7 @@ class WorkloadTests(unittest.TestCase):
         self.assertEqual(tokenizer.count([{"role": "user", "content": "review code"}]), 3)
 
     def test_launcher_uses_candidate_and_fixed_numerics(self):
-        argv = launch_argv(Path("checkpoint"), 1234)
+        argv = launch_argv(Path("checkpoint"), 1234, Path("shared-pack"))
         self.assertIn("monolith.serve", argv)
         for flag in (
             "--no-draft",

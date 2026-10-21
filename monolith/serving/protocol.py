@@ -82,6 +82,7 @@ class ChatRequest(BaseModel):
     top_k: int = Field(default=0, ge=0, le=2**32 - 1)
     seed: int = Field(default=0, ge=0, le=2**64 - 1)
     stop: str | list[str] | None = None
+    return_token_ids: bool = False
     stream: bool = False
     stream_options: dict | None = None
     n: Literal[1] = 1
@@ -96,6 +97,8 @@ class ChatRequest(BaseModel):
 
     @model_validator(mode='after')
     def validate_options(self):
+        if self.return_token_ids and self.stream:
+            raise ValueError('return_token_ids is supported only for non-streaming Chat Completions')
         if self.max_tokens is not None and self.max_completion_tokens is not None:
             raise ValueError('Pass only one of max_tokens and max_completion_tokens')
         stops = [self.stop] if isinstance(self.stop, str) else self.stop or []

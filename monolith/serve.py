@@ -283,7 +283,7 @@ class Backend:
         self._keep_warm = (stop, threading.Thread(target=loop, name='keep-warm', daemon=True))
         self._keep_warm[1].start()
 
-    def _complete(self, request, *, on_text=None, on_content=None, on_start=None, cancelled=None, on_progress=None):
+    def _complete(self, request, *, on_text=None, on_content=None, on_start=None, cancelled=None, on_progress=None, on_token_ids=None):
         from jinja2 import TemplateError
 
         request_started = time.perf_counter()
@@ -406,6 +406,8 @@ class Backend:
             on_content(content)
         if on_progress:
             on_progress(content, len(tokens))
+        if on_token_ids is not None:
+            on_token_ids([int(token) for token in tokens])
         return content, finish, len(ids), len(tokens)
 
     def visible_text(self, tokens, request):
@@ -466,10 +468,18 @@ def create_app(backend, model_name, api_key=None):
             raise APIError(f"Unknown model; use {model_name!r}", 404, "model_not_found", "model")
 
     def execute(request, wire, **options):
+        token_ids = []
+        if request.return_token_ids:
+            options['on_token_ids'] = token_ids.extend
         content, finish, prompt_tokens, completion_tokens = backend.complete(request, **options)
         wire.metrics = dict(getattr(backend, 'last_metrics', {}))
         message, finish = parse_completion(content, request, finish)
-        return wire.body(message, finish, prompt_tokens, completion_tokens)
+        body = wire.body(message, finish, prompt_tokens, completion_tokens)
+        if request.return_token_ids:
+            if len(token_ids) != completion_tokens:
+                raise RuntimeError('Backend did not report raw completion token IDs')
+            body['completion_token_ids'] = token_ids
+        return body
 
     def lifecycle(start=False):
         """The model's lifecycle (--model-ttl). Without one, an Ollama request with a finite keep_alive or a load or
@@ -738,6 +748,7 @@ def parse_args(argv=None):
     parser.add_argument("--draft-sampling", choices=['argmax', 'sample'], default='argmax',
                         help="Drafts at temperature > 0: argmax = the drafter's argmax, kept while the target samples it; "
                              "sample = drawn from the drafter's distribution, accepted with min(1, p/q). Both preserve the target's distribution")
+    parser.add_argument('--pack-read-only', action='store_true', help='Require an existing pack; never create or update packed files')
     parser.add_argument("--pack", help="Local pack-cache directory (default: $XDG_CACHE_HOME/lithos-metal/packs; reuses legacy cache); existing packs also accepted")
     parser.add_argument("--draft-pack", help="Optional separate draft cache or existing draft pack")
     parser.add_argument("--draft-quantization", choices=['auto', 'none', 'nvfp4'], default='auto',

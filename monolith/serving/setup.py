@@ -129,13 +129,14 @@ def prepare(args, *, device_info=None):
     root = Path(args.pack).expanduser() if args.pack else default_pack_cache()
     layout = PackLayout(lane_order=profile.lane_order, scale_placement=profile.scale_placement)
     pack = ensure_pack(model_dir, model, root, capacity=capacity, layout=layout,
-                       backend=profile.backend)
+                       backend=profile.backend, read_only=getattr(args, 'pack_read_only', False))
     draft_pack = None
     if draft:
         draft_root = Path(args.draft_pack).expanduser() if args.draft_pack else (
             root/'draft-cache' if (root/'manifest.json').exists() else root)
         draft_pack = ensure_pack(draft_dir, draft, draft_root, capacity=capacity, layout=layout,
-                                  backend=profile.backend, role='draft', quantization=quantization)
+                                  backend=profile.backend, role='draft', quantization=quantization,
+                                  read_only=getattr(args, 'pack_read_only', False))
     LOG.info('Serving backend=%s, target=%s, draft=%s, verify=%s, recipe contexts=%s',
              profile.backend, model_dir, draft_dir, gamma + 1 if gamma else 1, sorted(recipes))
     return ServingAssets(model_dir, pack, args.max_context, capacity, profile,

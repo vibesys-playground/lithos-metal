@@ -104,13 +104,29 @@ The trusted launcher starts from the candidate repository root:
 python3 -m monolith.serve --model "$FLINT_MODEL_PATH" \
   --revision 3b93f9053b530488405ae9fca51d4900d6ce21f0 \
   --local-files-only --no-draft --no-commute-norm --served-model-name flint \
+  --pack "$FLINT_PACK_DIR" --pack-read-only \
   --max-context 32768 --keep-warm 0 --host 127.0.0.1 --port PORT
 ```
 
-An operator may supply `FLINT_PACK_PATH`; the launcher then appends
-`--pack PATH` to reuse a compatible existing pack or shared pack cache. The
-engine must validate its weight, layout and context identity. This changes
-asset location, never the numerical contract.
+The launcher resolves `FLINT_PACK_DIR`, defaulting to
+`$HOME/.cache/lithos-metal/flint-int4/3b93f9053b530488405ae9fca51d4900d6ce21f0/block-r16-interleaved16-c9216`.
+It always passes `--pack PATH --pack-read-only`. The path must be outside the
+candidate worktree and already contain a complete pack. Missing or incompatible
+packs fail closed, never trigger packing. The shared baseline pack key is
+`65dcd02bfffafe7ef9c806b04a40f155ea4690d0111d77e03efff89a53c7ffe9`.
+The launcher requires free disk of at least 22,736,175,104 bytes plus 2 GiB
+before build or model load. It never copies or repacks weights in a worktree.
+
+A storage-layout change may prepare an extra pack only through
+`monolith.serving.pack_policy.SharedPackCache`, in a shared cache outside all
+worktrees. Key it by the full SHA-256 storage-compatibility identity, including
+checkpoint, quantization, row order, transforms and layout. Preserve the pinned
+pack. The cache keeps at most one extra pack, removes least-recently-used extras
+before building, admits one pack plus margin, publishes atomically and cleans
+failed or interrupted builds. Hold the GPU lock for the entire build or use.
+The current experiment authorizes only the existing pack; do not create an extra
+pack until disk and operator authorization permit it. Context-only rotary tables
+may be generated in memory without changing packed weights.
 
 Preserve these CLI options and the existing serving endpoints:
 
@@ -125,7 +141,7 @@ Preserve these CLI options and the existing serving endpoints:
   completion count 1 at first committed-token availability, then advance it
   through count 64. Keep-alives and role-only deltas do not count as tokens.
 - Non-streaming pins use 32 tokens and the same template and greedy path.
-  Their responses must include a top-level `completion_token_ids` array with
+  Their requests set `return_token_ids=true`; responses must include a top-level `completion_token_ids` array with
   the raw generated IDs, including special tokens. This is a required
   diagnostic extension to Chat Completions: Flint emits special tokens that
   the existing server removes from visible text, so text cannot establish

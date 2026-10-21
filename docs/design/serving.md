@@ -219,3 +219,21 @@ printed without launching the client.
 - [Protocol adaptation](../../monolith/serving/protocol.py)
 - [Streaming events](../../monolith/serving/events.py)
 - [Tool streaming](../../monolith/serving/tool_stream.py)
+
+## Raw completion token IDs
+
+Non-streaming `POST /v1/chat/completions` accepts the optional boolean
+`return_token_ids` (default false). When true, the response includes top-level
+`completion_token_ids`: actual committed runtime IDs in generation order,
+including special and EOS tokens. Its length equals `usage.completion_tokens`.
+Stop-string truncation applies to IDs and usage together; text presentation may
+hide special tokens or trim the stop string. IDs are never reconstructed from
+visible text. Streaming requests with this option fail validation.
+
+`--pack-read-only` requires an existing compatible pack and never creates,
+updates or repairs packed files. Missing/incompatible packs fail explicitly.
+Explicit layout migrations can use `monolith.serving.pack_policy.SharedPackCache`
+to atomically construct one extra pack in a separate shared cache. It preserves
+the pinned pack, evicts older extras before allocation, checks one-pack-plus-margin
+disk admission and removes partial builds. Callers serialize build/use with their
+model execution lock.

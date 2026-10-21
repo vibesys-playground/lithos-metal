@@ -20,6 +20,7 @@ import urllib.request
 from pathlib import Path
 
 from core import Turn, parse_stream
+from pack_policy import resolve_pack
 
 __all__ = [
     "MODEL",
@@ -40,7 +41,9 @@ def model_path() -> Path:
     cached = Path(snapshot_download(MODEL, revision=REVISION, local_files_only=True))
     path = Path(os.environ.get("FLINT_MODEL_PATH", cached)).expanduser().resolve()
     manifest = json.loads(
-        (Path(__file__).resolve().parents[1] / "reference" / "checkpoint.json").read_text()
+        (
+            Path(__file__).resolve().parents[1] / "reference" / "checkpoint.json"
+        ).read_text()
     )
     # Cache-only resolution above never downloads a second copy. A supplied
     # path must use these exact cached bytes, including tokenizer/template.
@@ -48,7 +51,9 @@ def model_path() -> Path:
         if Path(name).name != name or not (path / name).is_file():
             raise ValueError(f"Pinned checkpoint file missing: {name}")
         if not (path / name).samefile(cached / name):
-            raise ValueError(f"FLINT_MODEL_PATH must reuse pinned HF cache files: {name}")
+            raise ValueError(
+                f"FLINT_MODEL_PATH must reuse pinned HF cache files: {name}"
+            )
         with (path / name).open("rb") as source:
             digest = hashlib.file_digest(source, "sha256").hexdigest()
         if digest != manifest["checkpoint_files"][name]:
@@ -71,7 +76,9 @@ class PinnedTokenizer:
         from transformers import AutoTokenizer
 
         return cls(
-            AutoTokenizer.from_pretrained(path, local_files_only=True, trust_remote_code=False)
+            AutoTokenizer.from_pretrained(
+                path, local_files_only=True, trust_remote_code=False
+            )
         )
 
     def ids(self, messages: list[dict]) -> list[int]:
@@ -113,8 +120,13 @@ class HttpChat:
             "seed": 0,
             "stream": stream,
         }
+        if not stream:
+            body["return_token_ids"] = True
         if stream:
-            body["stream_options"] = {"include_usage": True, "continuous_usage_stats": True}
+            body["stream_options"] = {
+                "include_usage": True,
+                "continuous_usage_stats": True,
+            }
         request = urllib.request.Request(
             self.base_url + "/v1/chat/completions",
             data=json.dumps(body).encode(),
@@ -136,6 +148,8 @@ class HttpChat:
 
 
 def launch_argv(path: Path, port: int, pack_path: Path | None = None) -> list[str]:
+    if pack_path is None:
+        pack_path = resolve_pack(Path.cwd(), os.environ, Path.home())
     argv = [
         sys.executable,
         "-m",
@@ -146,6 +160,7 @@ def launch_argv(path: Path, port: int, pack_path: Path | None = None) -> list[st
         REVISION,
         "--local-files-only",
         "--no-draft",
+        "--pack-read-only",
         "--no-commute-norm",
         "--served-model-name",
         "flint",
@@ -170,6 +185,7 @@ def server_endpoint(workspace: Path, path: Path):
     Startup compilation/packing is outside benchmark wall time. Temporary log
     content is surfaced on failure, then removed; no machine paths are saved.
     """
+    pack = resolve_pack(workspace, os.environ, Path.home())
     subprocess.run(
         [sys.executable, str(Path(__file__).resolve().with_name("build.py"))],
         cwd=workspace,
@@ -188,9 +204,8 @@ def server_endpoint(workspace: Path, path: Path):
             with socket.socket() as probe:
                 probe.bind(("127.0.0.1", 0))
                 port = probe.getsockname()[1]
-            pack = os.environ.get("FLINT_PACK_PATH")
             proc = subprocess.Popen(
-                launch_argv(path, port, Path(pack).expanduser() if pack else None),
+                launch_argv(path, port, pack),
                 cwd=workspace,
                 stdout=log,
                 stderr=subprocess.STDOUT,
@@ -210,7 +225,9 @@ def server_endpoint(workspace: Path, path: Path):
                             f"lithos-metal exited during startup ({proc.returncode})"
                         )
                     try:
-                        with urllib.request.urlopen(url + "/health", timeout=2) as response:
+                        with urllib.request.urlopen(
+                            url + "/health", timeout=2
+                        ) as response:
                             if response.status == 200:
                                 break
                     except (urllib.error.URLError, TimeoutError):

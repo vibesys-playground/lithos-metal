@@ -108,7 +108,7 @@ def _lock(path):
             fcntl.flock(handle, fcntl.LOCK_UN)
 
 
-def ensure_pack(checkpoint, model, root, *, capacity, layout, backend, role='target', quantization=None):
+def ensure_pack(checkpoint, model, root, *, capacity, layout, backend, role='target', quantization=None, read_only=False):
     root = Path(root).expanduser().resolve()
     # Existing manually prepared packs remain usable; the caller explicitly selected them.
     if (root/'manifest.json').exists():
@@ -118,6 +118,8 @@ def ensure_pack(checkpoint, model, root, *, capacity, layout, backend, role='tar
             raise ValueError(f'Pack checkpoint identity does not match the selected model: {root}')
         LOG.info('Using existing %s pack: %s', role, root)
         return root
+    if read_only:
+        raise ValueError(f'Read-only pack is missing manifest.json: {root}; prepare a compatible shared pack explicitly')
     root.mkdir(parents=True, exist_ok=True)
     identity = dict(version=CACHE_VERSION, checkpoint=checkpoint_identity(checkpoint), capacity=capacity,
                     layout=asdict(layout), backend=backend, role=role, quantization=quantization,

@@ -1,0 +1,77 @@
+"""Hermetic launch policy: no model, process or Metal work."""
+
+import json
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "benchmark"))
+from pack_policy import MARGIN_BYTES, PACK_BYTES, default_pack_dir, resolve_pack
+
+
+class PackPolicyTests(unittest.TestCase):
+    def test_default_and_env_reuse_without_writing(self):
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp)
+            pack = default_pack_dir(home).resolve()
+            pack.mkdir(parents=True)
+            (pack / "manifest.json").write_text(json.dumps({"nbytes": 3}))
+            (pack / "weights.pack").write_bytes(b"abc")
+            before = {
+                p.name: (p.read_bytes(), p.stat().st_mtime_ns) for p in pack.iterdir()
+            }
+            for env in ({}, {"FLINT_PACK_DIR": str(pack)}):
+                self.assertEqual(
+                    resolve_pack(
+                        home / "worktree",
+                        env,
+                        home,
+                        free_bytes=PACK_BYTES + MARGIN_BYTES,
+                    ),
+                    pack,
+                )
+            after = {
+                p.name: (p.read_bytes(), p.stat().st_mtime_ns) for p in pack.iterdir()
+            }
+            self.assertEqual(before, after)
+            with self.assertRaisesRegex(ValueError, "Insufficient free disk"):
+                resolve_pack(
+                    home / "worktree",
+                    {},
+                    home,
+                    free_bytes=PACK_BYTES + MARGIN_BYTES - 1,
+                )
+
+    def test_missing_pack_never_creates_any_files(self):
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp)
+            with self.assertRaisesRegex(ValueError, "automatic packing is disabled"):
+                resolve_pack(home / "worktree", {}, home, free_bytes=2**60)
+            self.assertEqual(list(home.iterdir()), [])
+
+    def test_worktree_pack_and_symlink_into_worktree_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp)
+            worktree = home / "worktree"
+            pack = worktree / "pack"
+            pack.mkdir(parents=True)
+            alias = home / "alias"
+            alias.symlink_to(pack, target_is_directory=True)
+            for path in (pack, alias):
+                with self.assertRaisesRegex(
+                    ValueError, "outside the candidate worktree"
+                ):
+                    resolve_pack(
+                        worktree, {"FLINT_PACK_DIR": str(path)}, home, free_bytes=2**60
+                    )
+
+    def test_incomplete_pack_fails_closed(self):
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp)
+            pack = default_pack_dir(home).resolve()
+            pack.mkdir(parents=True)
+            (pack / "manifest.json").write_text(json.dumps({"nbytes": 4}))
+            (pack / "weights.pack").write_bytes(b"abc")
+            with self.assertRaisesRegex(ValueError, "incomplete"):
+                resolve_pack(home / "worktree", {}, home, free_bytes=2**60)
