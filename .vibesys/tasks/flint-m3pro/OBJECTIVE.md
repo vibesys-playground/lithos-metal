@@ -116,6 +116,11 @@ Preserve these CLI options and the existing serving endpoints:
   through count 64. Keep-alives and role-only deltas do not count as tokens.
 - Non-streaming pins use 32 tokens and the same template and greedy path.
 
+The task declares a candidate build that runs CMake in the measured checkout,
+producing its native extension in `monolith/runtime`. A preinstalled extension
+from a different checkout is not a substitute. Python, CMake and nanobind must
+be installed in the launch environment. Build failures invalidate measurement.
+
 A server is owned and stopped by each evaluator, including startup and
 measurement failures. Startup does not use another installed lithos-metal
 checkout; it executes this candidate's `monolith.serve` module.

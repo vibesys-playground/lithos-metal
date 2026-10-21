@@ -63,16 +63,24 @@ def model_path() -> Path:
 
 
 class PinnedTokenizer:
-    def __init__(self, path: Path):
+    def __init__(self, tokenizer):
+        self.tokenizer = tokenizer
+
+    @classmethod
+    def load(cls, path: Path):
         from transformers import AutoTokenizer
 
-        self.tokenizer = AutoTokenizer.from_pretrained(
-            path, local_files_only=True, trust_remote_code=False
+        return cls(
+            AutoTokenizer.from_pretrained(path, local_files_only=True, trust_remote_code=False)
         )
 
     def ids(self, messages: list[dict]) -> list[int]:
         return self.tokenizer.apply_chat_template(
-            messages, tokenize=True, add_generation_prompt=True
+            messages,
+            tokenize=True,
+            return_dict=False,
+            add_generation_prompt=True,
+            enable_thinking=False,
         )
 
     def count(self, messages: list[dict]) -> int:
@@ -171,6 +179,11 @@ def server_endpoint(workspace: Path, path: Path):
                 start_new_session=True,
             )
             url = f"http://127.0.0.1:{port}"
+
+            def terminate(signum, frame):
+                raise KeyboardInterrupt("Evaluator terminated")
+
+            prior_term = signal.signal(signal.SIGTERM, terminate)
             try:
                 deadline = time.monotonic() + 900
                 while True:
@@ -193,6 +206,7 @@ def server_endpoint(workspace: Path, path: Path):
                 print(log_path.read_text()[-8000:], file=sys.stderr)
                 raise
             finally:
+                signal.signal(signal.SIGTERM, prior_term)
                 # Kill the owned group even if its leader exited earlier.
                 with contextlib.suppress(ProcessLookupError):
                     os.killpg(proc.pid, signal.SIGTERM)

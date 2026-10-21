@@ -24,7 +24,7 @@ def main() -> int:
     writer = ResultWriter(args.vs_output) if args.vs_output else None
     try:
         path = model_path()
-        tokenizer = PinnedTokenizer(path)
+        tokenizer = PinnedTokenizer.load(path)
         with server_endpoint(Path.cwd(), path) as url:
             rows, wall = measure(HttpChat(url), tokenizer, time.monotonic)
         values = summarize(rows, wall)

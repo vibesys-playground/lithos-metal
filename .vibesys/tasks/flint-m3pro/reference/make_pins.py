@@ -40,7 +40,7 @@ def main() -> None:
     from rec_mlx.quantized import QATModel
 
     path = model_path()
-    tokenizer = PinnedTokenizer(path)
+    tokenizer = PinnedTokenizer.load(path)
     qat = QATModel(path)
     model = qat.native
     pins = []

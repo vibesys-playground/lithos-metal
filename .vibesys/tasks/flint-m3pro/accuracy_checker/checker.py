@@ -207,7 +207,7 @@ def main() -> int:
         pins = load_pins(task / "reference" / "pins.json")
         path = model_path()
         with server_endpoint(Path.cwd(), path) as url:
-            result = check_accuracy(HttpChat(url), PinnedTokenizer(path), pins)
+            result = check_accuracy(HttpChat(url), PinnedTokenizer.load(path), pins)
         print(json.dumps(result))
         return 0
     except Exception as exc:

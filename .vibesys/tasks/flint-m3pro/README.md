@@ -9,7 +9,10 @@ Use Python 3.12 and an editable source installation (`pip install -e
 '.[serve,dev]'`) so the native runtime is built for this checkout. The task
 scripts use `python3` from the active environment. Build and install commands
 that execute Metal work also need the GPU lock. No agent run is launched by
-these commands.
+these commands. The manifest declares a CMake candidate build so every fresh
+measurement checkout gets its own native extension. Install CMake and nanobind
+for the same Python interpreter. Host candidate-build support is a VibeSys
+prerequisite; a refusal must be fixed there, never bypassed in the trusted gate.
 
 The model is pinned to `RecursiveSI/flint-int4` revision
 `3b93f9053b530488405ae9fca51d4900d6ce21f0`. Default resolution uses

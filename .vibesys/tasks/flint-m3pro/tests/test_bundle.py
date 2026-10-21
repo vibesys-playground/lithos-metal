@@ -25,7 +25,7 @@ from core import (
     parse_stream,
     summarize,
 )
-from launcher import MODEL, REVISION, launch_argv
+from launcher import MODEL, REVISION, PinnedTokenizer, launch_argv
 from vs_protocol import METRICS, ResultWriter
 
 
@@ -147,6 +147,26 @@ class WorkloadTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             extend_history(history, 1024, FakeTokenizer(), 0, 1)
         self.assertEqual(history[0]["content"], "x" * 8000)
+
+    def test_template_adapter_returns_token_ids_with_thinking_disabled(self):
+        class TemplateTokenizer:
+            def apply_chat_template(
+                self,
+                messages,
+                *,
+                tokenize,
+                add_generation_prompt,
+                return_dict=True,
+                enable_thinking=True,
+            ):
+                if not tokenize or not add_generation_prompt:
+                    raise ValueError("This fixture requires a generation prompt")
+                tokens = [1, 2, 3, 4] if enable_thinking else [1, 2, 3]
+                return {"input_ids": tokens} if return_dict else tokens
+
+        tokenizer = PinnedTokenizer(TemplateTokenizer())
+        self.assertEqual(tokenizer.ids([{"role": "user", "content": "review code"}]), [1, 2, 3])
+        self.assertEqual(tokenizer.count([{"role": "user", "content": "review code"}]), 3)
 
     def test_launcher_uses_candidate_and_fixed_numerics(self):
         argv = launch_argv(Path("checkpoint"), 1234)
