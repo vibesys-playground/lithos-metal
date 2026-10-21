@@ -27,12 +27,13 @@ class Experts(Module):
     ``moe_gemv``, not by the slab's ``Linear``."""
 
     def __init__(self, in_features: int, n_experts: int, parts: Sequence[Tuple[str, str, int]], *, hf_template: str, prefix: str = "",
-                 epilogue: Optional[str] = None, chunk: Optional[int] = None) -> None:
+                 epilogue: Optional[str] = None, chunk: Optional[int] = None, round_silu: bool = False) -> None:
         super().__init__(prefix=prefix)
         self.n_experts, self.k = n_experts, in_features
         self.part_specs = list(parts)
         self.rows_per_expert = sum(r for _, _, r in parts)
         self.epilogue, self.chunk = epilogue, chunk
+        self.round_silu = round_silu
         perm = None
         if epilogue == "silu_mul":
             if len(parts) != 2 or parts[0][2] != parts[1][2] or not chunk:
@@ -58,6 +59,8 @@ class Experts(Module):
         if self.epilogue == "silu_mul":
             half = self.rows_per_expert // 2
             gate, up = acc[:, :half].to(x.dtype), acc[:, half:].to(x.dtype)                 # two BF16 linears, then silu·mul
+            if self.round_silu:
+                return torch.nn.functional.silu(gate.float()).to(x.dtype) * up
             return (torch.nn.functional.silu(gate.to(torch.float32)) * up.to(torch.float32)).to(x.dtype)
         return acc.to(x.dtype)
 
@@ -75,6 +78,7 @@ class Experts(Module):
         attrs: Dict[str, Any] = dict(top_k=top_k, expert_rows=self.rows_per_expert, epilogue=self.epilogue, format=grp.format, x_per_slot=x_per_slot)
         if self.epilogue == "silu_mul":
             attrs["chunk"] = self.chunk
+            attrs["round_silu"] = self.round_silu
         g.op("moe_gemv", [x, w, ids], [y], domain=BlockDomain("rows", t), klass=OpClass.MAP, **attrs)
         return y
 

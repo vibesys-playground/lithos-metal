@@ -37,6 +37,11 @@ class OpDef:
     cost: CostModel = field(default_factory=CostModel)
     kernels: Dict[str, KernelBinding] = field(default_factory=dict)   # profile key -> binding, "*" = any
 
+    # Optional package-owned Metal emitter; receives the compiler context and typed op.
+    metal_emitter: Any = None
+    # Target KV capacity is the leading dimension of this input, when present.
+    cache_input: Optional[int] = None
+
     def binding_for(self, profile_key: str) -> Optional[KernelBinding]:
         return self.kernels.get(profile_key) or self.kernels.get(WILDCARD)
 

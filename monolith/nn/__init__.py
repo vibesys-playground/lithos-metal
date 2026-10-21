@@ -3,6 +3,8 @@ is a ``forward()`` torch oracle, a ``lower()`` IR emission and a ``weight_map()`
 ``state_spec()`` and ``feature_taps()``. Torch is imported only inside ``forward``."""
 
 from .attention import GQAAttention
+from .causal_attention import CausalAttention
+from .sigmoid_moe import SigmoidMoE
 from .decoder import DecoderLayer
 from .embedding import Embedding
 from .gdn import GatedDeltaNet
@@ -14,6 +16,6 @@ from .module import LowerContext, Model, Module, StateEntry, StateSpec, WeightSp
 from .norm import NormInput, RMSNorm
 from .sampler import GreedySampler, StochasticSampler
 
-__all__ = ["GQAAttention", "DecoderLayer", "Embedding", "GatedDeltaNet", "Linear", "Part", "Projection", "SlabGroup",
+__all__ = ["CausalAttention", "SigmoidMoE", "GQAAttention", "DecoderLayer", "Embedding", "GatedDeltaNet", "Linear", "Part", "Projection", "SlabGroup",
            "LMHead", "GatedMLP", "LowerContext", "Model", "Module", "StateEntry", "StateSpec", "WeightSpec", "state_shape",
            "NormInput", "RMSNorm", "GreedySampler", "StochasticSampler"]
