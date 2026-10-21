@@ -58,3 +58,20 @@ def test_diagnostic_rejects_streaming():
             return_token_ids=True,
             stream=True,
         )
+
+
+def test_stop_string_truncates_raw_ids_and_usage_at_the_same_committed_token():
+    backend = Backend.__new__(Backend)
+    backend.max_context, backend.select_session = 64, lambda request, n: None
+    backend.session, backend.tokenizer = TokenSession(), Tokenizer()
+    request = ChatRequest(
+        model="test",
+        messages=[{"role": "user", "content": "hello"}],
+        max_tokens=4,
+        stop=" world",
+        return_token_ids=True,
+    )
+    seen = []
+    content, finish, _, count = backend.complete(request, on_token_ids=seen.extend)
+    assert content == "Hello" and finish == "stop"
+    assert seen == [10, 98, 11] and count == 3
