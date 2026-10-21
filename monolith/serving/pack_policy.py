@@ -51,25 +51,25 @@ class SharedPackCache:
     """
 
     def __init__(self, root, *, pinned, pack_bytes, margin_bytes):
-        self.root = Path(root).expanduser().resolve()
-        self.pinned = Path(pinned).expanduser().resolve()
+        self._root = Path(root).expanduser().resolve()
+        self._pinned = Path(pinned).expanduser().resolve()
         if (
-            self.root == self.pinned
-            or self.root in self.pinned.parents
-            or self.pinned in self.root.parents
+            self._root == self._pinned
+            or self._root in self._pinned.parents
+            or self._pinned in self._root.parents
         ):
             raise ValueError("Extra pack cache must be separate from the pinned pack")
-        self.pack_bytes, self.margin_bytes = pack_bytes, margin_bytes
+        self._pack_bytes, self._margin_bytes = pack_bytes, margin_bytes
 
     def resolve(self, layout_key, build):
         if not re.fullmatch(r"[0-9a-f]{64}", layout_key):
             raise ValueError(
                 "layout_key must be a full SHA-256 storage-compatibility key"
             )
-        self.root.mkdir(parents=True, exist_ok=True)
-        with _locked(self.root):
+        self._root.mkdir(parents=True, exist_ok=True)
+        with _locked(self._root):
             entries = []
-            for path in self.root.iterdir():
+            for path in self._root.iterdir():
                 if path.name == ".cache.lock":
                     continue
                 if (
@@ -82,7 +82,7 @@ class SharedPackCache:
                 ):
                     raise ValueError(f"Unexpected shared pack cache entry: {path.name}")
                 entries.append(path)
-            destination = self.root / layout_key
+            destination = self._root / layout_key
             hit = destination in entries
             # Keep only the requested hit. With a one-extra bound all older
             # entries must leave on a miss; sorting also recovers an overfull cache.
@@ -98,9 +98,9 @@ class SharedPackCache:
                 destination.touch()
                 return destination
             require_pack_space(
-                shutil.disk_usage(self.root).free, self.pack_bytes, self.margin_bytes
+                shutil.disk_usage(self._root).free, self._pack_bytes, self._margin_bytes
             )
-            temporary = Path(tempfile.mkdtemp(prefix=".building-", dir=self.root))
+            temporary = Path(tempfile.mkdtemp(prefix=".building-", dir=self._root))
             try:
                 build(temporary)
                 if (
@@ -112,8 +112,8 @@ class SharedPackCache:
                     p.stat().st_size for p in temporary.rglob("*") if p.is_file()
                 )
                 if (
-                    (temporary / "weights.pack").stat().st_size > self.pack_bytes
-                    or total_bytes > self.pack_bytes + self.margin_bytes
+                    (temporary / "weights.pack").stat().st_size > self._pack_bytes
+                    or total_bytes > self._pack_bytes + self._margin_bytes
                 ):
                     raise ValueError("Built pack exceeds admitted size")
                 temporary.rename(destination)

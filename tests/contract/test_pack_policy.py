@@ -30,7 +30,9 @@ def test_only_one_extra_and_pinned_pack_never_evicted(tmp_path):
     for key in ("a", "b", "a", "c"):
         path = cache.resolve(key * 64, build_pack)
         assert path.name == key * 64
-        assert [p.name for p in cache.root.iterdir() if p.is_dir()] == [key * 64]
+        assert [p.name for p in (tmp_path / "extra").iterdir() if p.is_dir()] == [
+            key * 64
+        ]
         assert {p.name: p.read_bytes() for p in pinned.iterdir()} == original
 
     def unexpected(_):
@@ -50,8 +52,8 @@ def test_failed_builder_and_crash_partial_are_reclaimed(tmp_path):
 
     with pytest.raises(RuntimeError, match="interrupted"):
         cache.resolve("a" * 64, interrupted)
-    assert not list(cache.root.glob("*/weights.pack"))
-    partial = cache.root / ".building-interrupted"
+    assert not list((tmp_path / "extra").glob("*/weights.pack"))
+    partial = (tmp_path / "extra") / ".building-interrupted"
     partial.mkdir()
     build_pack(partial)
     cache.resolve("b" * 64, build_pack)
@@ -65,7 +67,7 @@ def test_rejects_non_keys_without_writes(tmp_path, key):
     )
     with pytest.raises(ValueError, match="layout_key"):
         cache.resolve(key, build_pack)
-    assert not cache.root.exists()
+    assert not (tmp_path / "extra").exists()
 
 
 def test_size_and_disk_failure_leave_no_pack(tmp_path):
@@ -74,11 +76,16 @@ def test_size_and_disk_failure_leave_no_pack(tmp_path):
     )
     with pytest.raises(ValueError, match="exceeds admitted"):
         cache.resolve("a" * 64, build_pack)
-    assert not list(cache.root.glob("*/weights.pack"))
-    cache.pack_bytes = 2**100
+    assert not list((tmp_path / "extra").glob("*/weights.pack"))
+    cache = SharedPackCache(
+        tmp_path / "extra",
+        pinned=tmp_path / "pinned",
+        pack_bytes=2**100,
+        margin_bytes=0,
+    )
     with pytest.raises(ValueError, match="Insufficient free disk"):
         cache.resolve("b" * 64, build_pack)
-    assert not list(cache.root.glob("*/weights.pack"))
+    assert not list((tmp_path / "extra").glob("*/weights.pack"))
 
 
 def test_read_only_missing_pack_never_creates_directory(tmp_path):
