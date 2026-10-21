@@ -7,6 +7,7 @@ reduction ordering without changing the checkpoint or BF16 layer boundaries.
 
 import argparse
 import copy
+import hashlib
 import json
 import sys
 import tempfile
@@ -155,6 +156,35 @@ def native(args, ids, save):
     if args.inject == "no-sinks":
         for block in model.blocks:
             block.mixer.sinks = False
+    if args.greedy:
+        example = json.loads(args.fixture.read_text())["examples"][args.example]
+        try:
+            generated = session.generate(
+                example["prompt_ids"],
+                len(example["greedy_ids"]),
+                steps_per_cb=1,
+                in_flight=1,
+            )
+            mismatches = [
+                i
+                for i, (a, b) in enumerate(
+                    zip(generated.tokens, example["greedy_ids"], strict=True)
+                )
+                if a != b
+            ]
+            result = {
+                "tokens": generated.tokens,
+                "first_divergence": mismatches[0] if mismatches else None,
+                "mismatch_count": len(mismatches),
+                "total": len(generated.tokens),
+            }
+            (args.arrays / "greedy.json").write_text(
+                json.dumps(result, indent=2) + "\n"
+            )
+            print(json.dumps(result), flush=True)
+        finally:
+            session.release_engines()
+        return
     temporary = tempfile.TemporaryDirectory(prefix="flint-trace-tables-")
     try:
         if len(ids) + 1 > 9216:
@@ -241,6 +271,10 @@ def native(args, ids, save):
 
 
 def metrics(name, a, b):
+    if a.shape != b.shape or a.ndim != 2:
+        raise ValueError(f"{name}: incompatible trace shapes {a.shape} and {b.shape}")
+    if not np.all(np.isfinite(a)) or not np.all(np.isfinite(b)):
+        raise ValueError(f"{name}: non-finite trace value")
     if name.endswith(".ids"):
         equal = np.sort(a, axis=-1) == np.sort(b, axis=-1)
         record = {
@@ -299,7 +333,7 @@ def metrics(name, a, b):
                     )
                 ),
             )
-    return record
+    return dict(rows=len(a), **record)
 
 
 def load_array(path, start=None, end=None):
@@ -310,6 +344,10 @@ def load_array(path, start=None, end=None):
 
 
 def compare(args):
+    if (args.arrays / "inputs.json").read_text() != (
+        args.other / "inputs.json"
+    ).read_text():
+        raise ValueError("comparison requires identical teacher-forced input IDs")
     records = []
     for path in sorted(args.arrays.glob("*.npy")):
         a = load_array(path)
@@ -366,8 +404,16 @@ def main():
     ids = inputs(args)
     args.arrays.mkdir(parents=True, exist_ok=True)
     (args.arrays / "inputs.json").write_text(json.dumps(ids) + "\n")
+    marker = args.arrays / "complete.json"
+    marker.unlink(missing_ok=True)
+    input_hash = hashlib.sha256(json.dumps(ids).encode()).hexdigest()
+    if args.compare_to:
+        completed = json.loads((args.compare_to / "complete.json").read_text())
+        if completed["input_sha256"] != input_hash or completed["rows"] != len(ids):
+            raise ValueError("reference trace has incompatible input IDs/row count")
     arrays = {}
     reference_arrays = {}
+    seen_rows = {}
 
     with (
         open(args.arrays / "comparison.jsonl", "w")
@@ -376,6 +422,9 @@ def main():
     ) as comparisons:
 
         def save(start, name, value):
+            if start != seen_rows.get(name, 0):
+                raise ValueError(f"{name}: missing or repeated trace rows at {start}")
+            seen_rows[name] = start + len(value)
             if args.compare_to:
                 from monolith.formats.fp import bf16_to_f32
 
@@ -405,6 +454,24 @@ def main():
             arrays[name].flush()
 
         (reference if args.mode == "reference" else native)(args, ids, save)
+    if not args.greedy and (
+        not seen_rows or any(rows != len(ids) for rows in seen_rows.values())
+    ):
+        raise RuntimeError("incomplete teacher-forced trace")
+    marker.write_text(
+        json.dumps(
+            {
+                "mode": args.mode,
+                "precision": args.precision,
+                "chunk": args.chunk,
+                "rows": len(ids),
+                "input_sha256": input_hash,
+                "tensor_rows": seen_rows,
+            },
+            indent=2,
+        )
+        + "\n"
+    )
 
 
 if __name__ == "__main__":
