@@ -1,0 +1,26 @@
+version = 1
+backends = ["metal"]
+
+[agent]
+domain = "llm-serving"
+
+[accuracy]
+command = ["lockf", "-k", "/tmp/flint-gpu.lock", "python3", "${PROJECT_ROOT}/.vibesys/tasks/flint-m3pro/accuracy_checker/checker.py"]
+timeout_seconds = 1800
+
+[benchmark]
+command = ["lockf", "-k", "/tmp/flint-gpu.lock", "python3", "${PROJECT_ROOT}/.vibesys/tasks/flint-m3pro/benchmark/run.py"]
+timeout_seconds = 1500
+result_protocol = 2
+
+[catalogue]
+domain = "llm-serving"
+
+[catalogue.hardware]
+accelerator = "Apple Silicon M3 Pro"
+count = 1
+vendor = "apple"
+
+[catalogue.model]
+name = "Flint int4"
+maker = "recursive"
