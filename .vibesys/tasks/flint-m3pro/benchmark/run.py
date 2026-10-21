@@ -31,7 +31,9 @@ def main() -> int:
         values = summarize(rows, wall)
         total_wall = time.monotonic() - started
         if total_wall > 600:
-            raise ValueError(f"Whole benchmark exceeded 600 seconds ({total_wall:.3f}); workload={wall:.3f}")
+            raise ValueError(
+                f"Whole benchmark exceeded 600 seconds ({total_wall:.3f}); workload={wall:.3f}"
+            )
         values["wall_duration_s"] = total_wall
         output = args.output_json or Path(str(args.vs_output) + ".metrics.json")
         output.write_text(

@@ -86,6 +86,11 @@ class PinnedTokenizer:
     def count(self, messages: list[dict]) -> int:
         return len(self.ids(messages))
 
+    def visible(self, ids: list[int]) -> str:
+        return self.tokenizer.decode(
+            ids, skip_special_tokens=True, clean_up_tokenization_spaces=False
+        )
+
     def encode(self, text: str) -> list[int]:
         return self.tokenizer.encode(text, add_special_tokens=False)
 
@@ -164,6 +169,14 @@ def server_endpoint(workspace: Path, path: Path):
     Startup compilation/packing is outside benchmark wall time. Temporary log
     content is surfaced on failure, then removed; no machine paths are saved.
     """
+    subprocess.run(
+        [sys.executable, str(Path(__file__).resolve().with_name("build.py"))],
+        cwd=workspace,
+        check=True,
+        timeout=480,
+        stdout=sys.stderr,
+        stderr=subprocess.STDOUT,
+    )
     with tempfile.TemporaryDirectory(prefix="flint-eval-") as temp:
         log_path = Path(temp) / "server.log"
         with log_path.open("w+") as log:

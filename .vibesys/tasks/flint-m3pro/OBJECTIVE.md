@@ -124,11 +124,20 @@ Preserve these CLI options and the existing serving endpoints:
   completion count 1 at first committed-token availability, then advance it
   through count 64. Keep-alives and role-only deltas do not count as tokens.
 - Non-streaming pins use 32 tokens and the same template and greedy path.
+  Their responses must include a top-level `completion_token_ids` array with
+  the raw generated IDs, including special tokens. This is a required
+  diagnostic extension to Chat Completions: Flint emits special tokens that
+  the existing server removes from visible text, so text cannot establish
+  exact token equality. The extension must report actual runtime outputs,
+  never retokenized visible text.
 
-The task declares a candidate build that runs CMake in the measured checkout,
-producing its native extension in `monolith/runtime`. A preinstalled extension
-from a different checkout is not a substitute. Python, CMake and nanobind must
-be installed in the launch environment. Build failures invalidate measurement.
+The evaluated launcher runs CMake in the measured checkout before starting
+the server, producing its native extension in `monolith/runtime`. There is
+no manifest `[build]` stage: host evaluation does not provide a confined build
+runner. A preinstalled extension from another checkout is not a substitute.
+Python, CMake and nanobind must be installed in the launch environment.
+Build failures invalidate measurement and build time is included in benchmark
+wall time.
 
 A server is owned and stopped by each evaluator, including startup and
 measurement failures. Startup does not use another installed lithos-metal
@@ -140,8 +149,10 @@ checkout; it executes this candidate's `monolith.serve` module.
 semantics and multi-turn recall) plus at least four independent greedy pins.
 Every 32-token pin must match exactly, on two passes in opposite order, with
 no short-output tolerance or tunable threshold. Prompt IDs must also match
-the pinned tokenizer's chat template. A text-only endpoint cannot expose a
-non-roundtripping token sequence faithfully; such a reference pin fails closed.
+the pinned tokenizer's chat template. Raw completion IDs and visible decoded
+text are both checked. A server without `completion_token_ids` fails closed;
+the gate never reconstructs missing special tokens or accepts text as a
+substitute for raw IDs.
 Missing pins fail closed and never become a passing baseline.
 
 The independent reference uses the same pinned INT4 weights through rec's

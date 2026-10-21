@@ -65,8 +65,8 @@ def main() -> None:
             generated.append(token)
             logits = model(mx.array([[token]]), cache=cache)
             mx.eval(logits)
-        if tokenizer.encode(tokenizer.decode(generated)) != generated:
-            raise ValueError(f"Pin {index} cannot be checked losslessly through text API")
+        if any(t in qat.eos_tokens for t in generated):
+            raise ValueError(f"Pin {index} reached EOS before its fixed 32-token budget")
         pins.append(
             {
                 "id": f"code-{index}",

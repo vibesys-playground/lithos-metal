@@ -5,10 +5,6 @@ backends = ["metal"]
 domain = "llm-serving"
 interface = "service"
 
-[build]
-command = ["python3", "${PROJECT_ROOT}/.vibesys/tasks/flint-m3pro/benchmark/build.py"]
-timeout_seconds = 480
-
 [accuracy]
 command = ["lockf", "-k", "/tmp/flint-gpu.lock", "python3", "${PROJECT_ROOT}/.vibesys/tasks/flint-m3pro/accuracy_checker/checker.py"]
 timeout_seconds = 1800

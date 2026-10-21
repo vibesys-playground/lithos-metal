@@ -55,6 +55,9 @@ class FakeTokenizer:
     def decode(self, ids):
         return "".join(chr(i) for i in ids)
 
+    def visible(self, ids):
+        return self.decode(ids)
+
 
 def frames(prompt_tokens=1024):
     result = [b": keep-alive\n", b"\n"]
@@ -269,6 +272,7 @@ class PinTests(unittest.TestCase):
                 return {
                     "choices": [{"message": {"content": content}}],
                     "usage": {"completion_tokens": len(content)},
+                    "completion_token_ids": [ord(c) for c in content],
                 }
 
         return PinServer()
@@ -279,6 +283,42 @@ class PinTests(unittest.TestCase):
         self.assertEqual(result["pins_passed"], 4)
         with self.assertRaisesRegex(ValueError, "diverged at token 0"):
             check_accuracy(self.server(pins, corrupt=True), FakeTokenizer(), pins)
+
+    def test_special_tokens_require_raw_ids_even_when_visible_text_matches(self):
+        pins = self.load(self.payload())
+        pins[0]["expected_token_ids"] = [0, *([ord("x")] * 31)]
+        base = self.server(pins)
+
+        class SpecialTokenizer(FakeTokenizer):
+            def visible(self, ids):
+                return self.decode([n for n in ids if n > 1])
+
+        class RawServer:
+            missing = False
+            corrupt = False
+
+            def greedy(self, messages, max_tokens):
+                body = base.greedy(messages, max_tokens)
+                for pin in pins:
+                    if messages == pin["messages"]:
+                        ids = list(pin["expected_token_ids"])
+                        body["completion_token_ids"] = ids
+                        body["choices"][0]["message"]["content"] = SpecialTokenizer().visible(ids)
+                        body["usage"]["completion_tokens"] = 32
+                        if self.corrupt and ids[0] == 0:
+                            body["completion_token_ids"] = [1, *ids[1:]]
+                        if self.missing:
+                            body.pop("completion_token_ids")
+                return body
+
+        server = RawServer()
+        check_accuracy(server, SpecialTokenizer(), pins)
+        server.corrupt = True
+        with self.assertRaisesRegex(ValueError, "diverged at token 0"):
+            check_accuracy(server, SpecialTokenizer(), pins)
+        server.corrupt, server.missing = False, True
+        with self.assertRaisesRegex(ValueError, "requires raw completion_token_ids"):
+            check_accuracy(server, SpecialTokenizer(), pins)
 
     def test_pin_provenance_and_schema_fail_closed(self):
         for field, value in (

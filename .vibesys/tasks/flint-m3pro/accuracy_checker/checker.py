@@ -185,18 +185,22 @@ def check_accuracy(chat: PinChat, tokenizer: PinnedTokenizer, pins: list[dict]) 
         if tokenizer.ids(pin["messages"]) != pin["prompt_token_ids"]:
             raise ValueError(f"Chat-template mismatch for pin {pin['id']}")
         expected = pin["expected_token_ids"]
-        if tokenizer.encode(tokenizer.decode(expected)) != expected:
-            raise ValueError(f"Pin {pin['id']} is not losslessly observable via text API")
         body = chat.greedy(pin["messages"], PIN_LENGTH)
-        got = tokenizer.encode(response_text(body))
+        got = body.get("completion_token_ids")
+        if not isinstance(got, list) or any(type(n) is not int or n < 0 for n in got):
+            raise ValueError(
+                "Non-streaming response requires raw completion_token_ids; text strips Flint special tokens"
+            )
         if got != expected or body.get("usage", {}).get("completion_tokens") != PIN_LENGTH:
             first = next(
-                (i for i, (a, b) in enumerate(zip(got, expected)) if a != b),
+                (i for i, (a, b) in enumerate(zip(got, expected, strict=False)) if a != b),
                 min(len(got), len(expected)),
             )
             raise ValueError(
                 f"Greedy pin {pin['id']} diverged at token {first}: {got[:PIN_LENGTH]}"
             )
+        if response_text(body) != tokenizer.visible(expected):
+            raise ValueError(f"Visible text mismatch for pin {pin['id']}")
     return {"probes_passed": len(PROBES), "pins_passed": len(pins), "repeat_passes": 2}
 
 

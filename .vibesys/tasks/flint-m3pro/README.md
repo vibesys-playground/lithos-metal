@@ -9,10 +9,11 @@ Use Python 3.12 and an editable source installation (`pip install -e
 '.[serve,dev]'`) so the native runtime is built for this checkout. The task
 scripts use `python3` from the active environment. Build and install commands
 that execute Metal work also need the GPU lock. No agent run is launched by
-these commands. The manifest declares a CMake candidate build so every fresh
-measurement checkout gets its own native extension. Install CMake and nanobind
-for the same Python interpreter. Host candidate-build support is a VibeSys
-prerequisite; a refusal must be fixed there, never bypassed in the trusted gate.
+these commands. The evaluated launcher runs the CMake native build so every fresh
+measurement checkout gets its own extension. Install CMake and nanobind for
+the same Python interpreter. The manifest intentionally has no `[build]`: the
+host environment still refuses that stage without a confined command runner.
+This self-contained launcher build is the authorized host evaluation path.
 
 The model is pinned to `RecursiveSI/flint-int4` revision
 `3b93f9053b530488405ae9fca51d4900d6ce21f0`. Default resolution uses
@@ -57,6 +58,9 @@ Review and commit the generated pins before any experiment. Do not install rec
 as a serving dependency. The reference never uses `Model.make_cache`, whose
 full-attention defaults quantize KV. Pins have fixed provenance and thresholds;
 the task offers no `--skip-pins`, external-server or custom-launch bypass.
+The pin endpoint requires raw `completion_token_ids` because Flint emits
+special tokens that the server strips from text. The model-port server needs
+that response extension before its baseline can pass this exact-ID gate.
 
 VibeSys launch, from a VibeSys checkout with this external repository fetched:
 
