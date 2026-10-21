@@ -40,7 +40,8 @@ embeddings unchanged. Repacking exact codes/scales/biases is allowed;
 requantization, alternate weights and KV quantization are forbidden. KV must
 be BF16. The checkpoint's rec configuration contains quantized-KV defaults;
 those defaults do not authorize using them here. No speculative draft model
-is supplied. Changes must retain greedy output agreement.
+is supplied. The baseline launcher preserves input normalization before
+projections with `--no-commute-norm`, matching the reference's BF16 rounding. Changes must retain greedy output agreement.
 
 Do not modify `.vibesys/tasks/`, model weights, reference pins, the accuracy
 gate, benchmark, objectives, or launcher. VibeSys protects task inputs. Do not
@@ -102,7 +103,7 @@ The trusted launcher starts from the candidate repository root:
 ```sh
 python3 -m monolith.serve --model "$FLINT_MODEL_PATH" \
   --revision 3b93f9053b530488405ae9fca51d4900d6ce21f0 \
-  --local-files-only --no-draft --served-model-name flint \
+  --local-files-only --no-draft --no-commute-norm --served-model-name flint \
   --max-context 32768 --keep-warm 0 --host 127.0.0.1 --port PORT
 ```
 

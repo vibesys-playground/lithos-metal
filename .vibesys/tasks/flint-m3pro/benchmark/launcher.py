@@ -146,6 +146,7 @@ def launch_argv(path: Path, port: int, pack_path: Path | None = None) -> list[st
         REVISION,
         "--local-files-only",
         "--no-draft",
+        "--no-commute-norm",
         "--served-model-name",
         "flint",
         "--max-context",

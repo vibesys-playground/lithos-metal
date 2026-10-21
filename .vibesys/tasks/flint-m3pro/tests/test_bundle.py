@@ -176,7 +176,13 @@ class WorkloadTests(unittest.TestCase):
     def test_launcher_uses_candidate_and_fixed_numerics(self):
         argv = launch_argv(Path("checkpoint"), 1234)
         self.assertIn("monolith.serve", argv)
-        for flag in ("--no-draft", "--local-files-only", "--max-context", "--keep-warm"):
+        for flag in (
+            "--no-draft",
+            "--no-commute-norm",
+            "--local-files-only",
+            "--max-context",
+            "--keep-warm",
+        ):
             self.assertIn(flag, argv)
         self.assertNotIn("mlx", " ".join(argv))
         cached = launch_argv(Path("checkpoint"), 1234, Path("shared-pack"))
