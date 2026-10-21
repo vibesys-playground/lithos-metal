@@ -1,0 +1,281 @@
+{
+  "version": 1,
+  "model": "RecursiveSI/flint-int4",
+  "revision": "3b93f9053b530488405ae9fca51d4900d6ce21f0",
+  "kv_format": "bf16",
+  "reference": {
+    "repo": "https://github.com/recursive-oss/rec",
+    "commit": "e53663b262af4cb1ca498e596ca8b1a2d79e0800",
+    "path": "engine/src/rec_mlx/quantized.py:QATModel.native",
+    "versions": {
+      "mlx": "0.32.4",
+      "mlx-lm": "0.32.2",
+      "transformers": "5.20.2"
+    },
+    "cache": "unquantized KVCache / RotatingKVCache; no megakernel",
+    "reused_port_goldens": {
+      "sha256": "03bb2306a65e4c3d52c9f0826a9ccc10d68e5214920df51daadd7848739f26cd",
+      "source": "tests/models/flint/goldens/int4.json",
+      "reference": {
+        "repo": "https://github.com/recursive-oss/rec",
+        "commit": "e53663b262af4cb1ca498e596ca8b1a2d79e0800",
+        "path": "engine/src/rec_mlx/quantized.py:QATModel.native",
+        "cache": "unquantized KVCache / RotatingKVCache; no megakernel",
+        "versions": {
+          "mlx": "0.32.4",
+          "mlx-lm": "0.32.2",
+          "transformers": "5.20.2"
+        }
+      }
+    },
+    "excluded_port_examples_early_eos": [
+      0
+    ],
+    "prefill_chunk": 128
+  },
+  "pins": [
+    {
+      "id": "port-1",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Write one sentence about the ocean."
+        }
+      ],
+      "prompt_token_ids": [
+        150003,
+        7421,
+        703,
+        9515,
+        762,
+        269,
+        12769,
+        13,
+        150004
+      ],
+      "expected_token_ids": [
+        150006,
+        16,
+        13,
+        220,
+        450,
+        1464,
+        14313,
+        340,
+        703,
+        9515,
+        762,
+        269,
+        12769,
+        501,
+        17,
+        13,
+        220,
+        450,
+        9515,
+        1076,
+        356,
+        30256,
+        11,
+        94082,
+        11,
+        424,
+        51786,
+        11,
+        625,
+        1710,
+        356,
+        260
+      ]
+    },
+    {
+      "id": "port-2",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Complete the Python expression: sum([1, 2, 3]) equals"
+        }
+      ],
+      "prompt_token_ids": [
+        150003,
+        18536,
+        269,
+        7210,
+        4523,
+        25,
+        2842,
+        3423,
+        16,
+        11,
+        220,
+        17,
+        11,
+        220,
+        18,
+        2910,
+        14094,
+        150004
+      ],
+      "expected_token_ids": [
+        150006,
+        1978,
+        877,
+        3087,
+        1464,
+        13,
+        12917,
+        3901,
+        7210,
+        4523,
+        25,
+        2842,
+        3423,
+        16,
+        11,
+        17,
+        11,
+        18,
+        2910,
+        14094,
+        13,
+        100355,
+        3087,
+        220,
+        21,
+        13,
+        12917,
+        6392,
+        950,
+        368,
+        21,
+        3111
+      ]
+    },
+    {
+      "id": "code-0",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Write a Python implementation of merge sort, including a docstring and several tests."
+        }
+      ],
+      "prompt_token_ids": [
+        150003,
+        7421,
+        260,
+        7210,
+        6578,
+        297,
+        13210,
+        3279,
+        11,
+        2097,
+        260,
+        132849,
+        299,
+        2736,
+        5398,
+        13,
+        150004
+      ],
+      "expected_token_ids": [
+        150006,
+        1978,
+        877,
+        295,
+        3208,
+        260,
+        7210,
+        6578,
+        297,
+        13210,
+        3279,
+        11,
+        2097,
+        260,
+        132849,
+        299,
+        2736,
+        5398,
+        346,
+        630,
+        1464,
+        14313,
+        25,
+        368,
+        7421,
+        260,
+        7210,
+        6578,
+        297,
+        13210,
+        3279,
+        11
+      ]
+    },
+    {
+      "id": "code-1",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Implement a bounded LRU cache in Python. Explain eviction and add tests for edge cases."
+        }
+      ],
+      "prompt_token_ids": [
+        150003,
+        17783,
+        260,
+        24941,
+        93977,
+        9020,
+        293,
+        7210,
+        13,
+        31673,
+        84220,
+        299,
+        836,
+        5398,
+        340,
+        4790,
+        3656,
+        13,
+        150004
+      ],
+      "expected_token_ids": [
+        150006,
+        1978,
+        877,
+        295,
+        2986,
+        260,
+        24941,
+        93977,
+        9020,
+        293,
+        7210,
+        13,
+        450,
+        1464,
+        14313,
+        25,
+        368,
+        17783,
+        260,
+        24941,
+        93977,
+        9020,
+        293,
+        7210,
+        13,
+        31673,
+        84220,
+        299,
+        836,
+        5398,
+        340,
+        4790
+      ]
+    }
+  ]
+}

@@ -45,7 +45,8 @@ def reuse_port_goldens(
         raise ValueError("Model-port goldens require pinned plain reference and unquantized KV")
     pins, excluded = [], []
     for index, example in enumerate(data["examples"]):
-        if set(example) != {"prompt", "prompt_ids", "greedy_ids", "top_logits"}:
+        required = {"prompt", "prompt_ids", "greedy_ids", "top_logits"}
+        if not required <= set(example) <= required | {"step_top2"}:
             raise ValueError("Unknown/missing model-port example keys")
         prompt = example["prompt"]
         if not prompt.startswith("<|user|>") or not prompt.endswith("<|assistant|>"):
@@ -91,11 +92,12 @@ def main() -> None:
     tokenizer = PinnedTokenizer.load(path)
     pins, excluded, reused = [], [], None
     if args.port_goldens.is_file():
-        data = json.loads(args.port_goldens.read_text())
+        golden_bytes = args.port_goldens.read_bytes()
+        data = json.loads(golden_bytes)
         eos = json.loads((path / "config.json").read_text())["eos_token_id"]
         pins, excluded = reuse_port_goldens(data, tokenizer, eos)
         reused = {
-            "sha256": hashlib.sha256(args.port_goldens.read_bytes()).hexdigest(),
+            "sha256": hashlib.sha256(golden_bytes).hexdigest(),
             "source": "tests/models/flint/goldens/int4.json",
             "reference": data["reference"],
         }

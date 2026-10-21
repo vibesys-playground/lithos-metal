@@ -391,6 +391,7 @@ class GoldenReuseTests(unittest.TestCase):
                     "prompt_ids": tokenizer.ids([{"role": "user", "content": content}]),
                     "greedy_ids": [0 if i == 0 else 120] * 64,
                     "top_logits": [],
+                    "step_top2": [],
                 }
             )
         data = {
