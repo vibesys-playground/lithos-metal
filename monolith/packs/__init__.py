@@ -8,8 +8,9 @@ optional elementwise transform. Everything is page-aligned so the runtime can ma
 ``MTLBuffer`` (packs larger than ``maxBufferLength`` are split at slab boundaries).
 """
 
+from .tables import extended_tables
 from .packer import AuxRequest, PackFile, Packer, Segment, SlabRequest, TableRequest
 from .transforms import bf16_round_f32, compose, head_dim_perm, interleave_chunks, neg_exp, one_plus, rope_head_perm
 
-__all__ = ["AuxRequest", "PackFile", "Packer", "Segment", "SlabRequest", "TableRequest", "bf16_round_f32", "compose",
+__all__ = ["extended_tables", "AuxRequest", "PackFile", "Packer", "Segment", "SlabRequest", "TableRequest", "bf16_round_f32", "compose",
            "head_dim_perm", "interleave_chunks", "neg_exp", "one_plus", "rope_head_perm"]

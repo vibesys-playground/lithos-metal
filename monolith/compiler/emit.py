@@ -1377,7 +1377,7 @@ def emit_program(g: Graph, *, pack: Union[PackFile, Sequence[PackFile]], profile
                  layout: Optional[StepStateLayout] = None, eos: Union[int, Sequence[int]] = -1, ring_capacity: int = 4096, tg: int = 384, tuner: Any = None,
                  tail: Optional[str] = "advance", token: Optional[Value] = None, speculative: bool = False, barriers: str = "minimal",
                  attention: Optional[str] = None, accelerator: Optional[str] = None, t_min: int = 1, commute_norm: bool = True,
-                 gdn_mixer_fusion: bool = True) -> Program:
+                 gdn_mixer_fusion: bool = True, tables=None) -> Program:
     """Check coverage on ``profile`` and emit the step program for a lowered (and passed) graph: for a static
     ``T = t`` (kernels specialized, T from params), or with ``dynamic_t`` for any T ≤ ``t`` read from StepState
     at run time. The dynamic bound defaults to ``layout.t_max``; an explicit smaller ``t`` lets programs share
@@ -1388,6 +1388,8 @@ def emit_program(g: Graph, *, pack: Union[PackFile, Sequence[PackFile]], profile
     barrier pass), ``"all"`` after every op (v0; the A/B baseline). The profile's ``sibling_order`` decides whether a
     mixer's gate GEMV is encoded after its core (``alu_first``, ``either``) or before it (``bus_first``); its
     ``accelerator`` (or the override) sends the T > 1 GEMVs to the tensor-ops tile (#51).
+    ``tables`` supplies model-generated F32 constants for leading-axis growth.
+    Packed prefixes must match bit for bit; replacements live only in memory.
     ``gdn_mixer_fusion`` selects the profile's measured mixer recipe only for
     static T=8, matching GDN shapes and a complete native MLP normalization boundary.
     Set it false to retain original dispatches; dynamic/speculative programs are unchanged."""
@@ -1404,6 +1406,15 @@ def emit_program(g: Graph, *, pack: Union[PackFile, Sequence[PackFile]], profile
                attn_v2_tg=int(profile.attention_v2_threadgroups),
                accel_min_t=dict(profile.accelerator_min_t), tuner=tuner, eos=eos, ring_capacity=ring_capacity, t_min=max(1, int(t_min)), commute_norm=commute_norm)
     _pack_windows(ctx)
+    from ..packs import extended_tables
+    replacements = {}
+    for pk in packs:
+        owned = {name: value for name, value in (tables or {}).items() if name in pk.aux}
+        replacements.update(extended_tables(pk, owned))
+    for name, data in replacements.items():
+        bname = f'computed.{name}'
+        program.buffers[bname] = BufferSpec(len(data), data, 'weights')
+        ctx.windows[name] = (bname, 0)
     ctx.ctx_cap_target, ctx.ctx_cap = _context_capacity(ctx, g)
     program.context_capacity = ctx.ctx_cap
     hoisted = {op.attrs["stat_value"]: ctx.slab_info(op.inputs[1].name).n_blocks for op in g.ops if op.kind == "gemv" and op.attrs.get("stat_value")}
@@ -1425,8 +1436,10 @@ def emit_program(g: Graph, *, pack: Union[PackFile, Sequence[PackFile]], profile
             if v.name not in ctx.windows:
                 raise KeyError(f"emit_program: the pack has no entry for {v.name!r}")
             if v.is_const:
+                if v.name in replacements and len(replacements[v.name]) != _value_bytes(v, t):
+                    raise ValueError(f'emit_program: computed constant {v.name!r} does not match graph shape {v.shape}')
                 aux = next((pk.aux[v.name] for pk in packs if v.name in pk.aux), None)
-                if aux is not None and _value_bytes(v, t) > int(aux["nbytes"]):
+                if aux is not None and v.name not in replacements and _value_bytes(v, t) > int(aux["nbytes"]):
                     raise ValueError(
                         f"emit_program: constant {v.name!r} needs {_value_bytes(v, t)} bytes "
                         f"for shape {v.shape}, but its pack entry has only {aux['nbytes']} bytes "
@@ -1574,7 +1587,7 @@ def compile_program(model: Model, pack: PackFile, profile: Profile, *, t: Option
             p(g)
         return emit_program(g, pack=pack, profile=profile, t=t, dynamic_t=dynamic_t, layout=layout, eos=eos, ring_capacity=ring_capacity, tg=tg,
                             tuner=tuner, tail="advance", token=token, barriers=barriers, attention=attention, accelerator=accelerator, commute_norm=commute_norm,
-                            gdn_mixer_fusion=gdn_mixer_fusion)
+                            gdn_mixer_fusion=gdn_mixer_fusion, tables=model.tables())
     if not dynamic_t:
         raise ValueError("compile_program: the speculative round needs the dynamic-T program (dynamic_t=True)")
     if drafter_pack is None:
@@ -1602,7 +1615,7 @@ def compile_program(model: Model, pack: PackFile, profile: Profile, *, t: Option
     t_min = 2 if not prefill and (cost is not None or (fixed is not None and fixed >= 1)) else 1
     program = emit_program(g, pack=[pack, drafter_pack], profile=profile, t=t, dynamic_t=True, layout=layout, eos=eos, ring_capacity=ring_capacity,
                         tg=tg, tuner=tuner, tail=None, speculative=True, barriers=barriers, attention=attention, accelerator=accelerator, t_min=t_min, commute_norm=commute_norm,
-                        gdn_mixer_fusion=gdn_mixer_fusion)
+                        gdn_mixer_fusion=gdn_mixer_fusion, tables={**model.tables(), **drafter.tables()})
     program = current_backend().optimize_draft(program, drafter, prefill=prefill)
     place_barriers(program, barriers)
     return program

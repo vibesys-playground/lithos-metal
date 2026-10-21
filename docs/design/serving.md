@@ -237,3 +237,10 @@ to atomically construct one extra pack in a separate shared cache. It preserves
 the pinned pack, evicts older extras before allocation, checks one-pack-plus-margin
 disk admission and removes partial builds. Callers serialize build/use with their
 model execution lock.
+
+Computed F32 position tables can grow in memory when a model requests more
+context than an existing pack. Only a leading-axis extension with identical
+trailing dimensions and a bit-for-bit matching packed prefix is accepted.
+The compiler binds the model-generated full table to its own initialized
+buffer; all weight windows remain mapped from the original pack read-only.
+Shape, dtype or prefix mismatches require a compatible pack and fail closed.

@@ -11,6 +11,7 @@ import shutil
 import tempfile
 
 from ..nn.pack_plan import pack_model
+from ..packs import PackFile, extended_tables
 
 LOG = logging.getLogger(__name__)
 CACHE_VERSION = 1  # Bump when packing or quantization semantics change.
@@ -80,7 +81,11 @@ def validate_pack(path, model, capacity, *, quantization=None, identity=None):
     if (path/'weights.pack').stat().st_size != doc['nbytes']:
         raise ValueError(f'Incomplete weights.pack in {path}; rebuild this cache entry')
     if doc.get('options', {}).get('max_context', 0) < capacity:
-        raise ValueError(f'Pack {path} has insufficient context capacity; use a new cache directory')
+        tables = model.tables()
+        replacements = extended_tables(PackFile(path), tables)
+        if not replacements or any(len(values.shape) < 1 or values.shape[0] < capacity
+                                   for _, values in tables.values()):
+            raise ValueError(f'Pack {path} has insufficient context capacity and no compatible computed-table extension')
     if doc.get('quantize', {}).get('format') != quantization:
         raise ValueError(f'Pack {path} does not match requested quantization {quantization!r}')
     if quantization and doc.get('quantize', {}).get('keep') != ['markov_w1']:
