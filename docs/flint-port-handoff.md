@@ -287,3 +287,27 @@ the diagnostic rather than treating one reference pair as an exhaustive bound.
 Long-context comparisons use BF16 32-row chunks and FP32 32-row chunks, plus
 the complete 1k BF16 one-row trace. All are exact widenings or execution-order
 changes of the same checkpoint, never requantizations.
+
+### Semantic mutation evidence
+
+The full 1k no-sink counterfactual produces maximum logit error **69.25**,
+relative L2 **1.03640936**, minimum logit cosine **0.95269786**, and **323/1024**
+top-1 mismatches; a mismatching reference margin reaches **20.2109375**.
+The unmodified port has **11.625**, **0.08263425**, **0.99765523**, and **2/1024**
+mismatches, maximum margin **0.1328125**. Rec BF16 chunk-1 versus chunk-32 has
+**11.25**, **0.09523529**, **0.99754886**, **2/1024**, and **0.15625**.
+
+`tests/kernels/test_causal_boundary.py` adds deterministic histories at absolute
+positions 513, 1026, 4096 and 16384. Sliding attention has a dominant key exactly
+at p-512; full attention keeps the dominant key at zero and disables RoPE. A sink
+has twice that key's exponential mass. The actual operation passes the existing
+**2 BF16 ULP** oracle contract, while compiling with window 512 creates error
+above **0.25**, and disabling sinks creates error above **0.5**. These are
+constructed semantic checks, independent of whole-model noise tolerances.
+All 65 boundary/attention/MoE/decode-state tests pass under Metal shader
+validation (`.agent-logs/causal-boundary-validation.log`).
+
+A real reference-only free-running check also diverges: fixture 1, BF16 prompt
+ingested one token at a time instead of the canonical whole-prompt prefill,
+first divergence **44/64**. Post-divergence token mismatch count is 20/64;
+those later tokens are a different trajectory, not independent numerical errors.
