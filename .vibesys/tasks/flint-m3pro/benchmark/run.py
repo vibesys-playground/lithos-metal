@@ -31,16 +31,20 @@ def main() -> int:
     repeats = 1 if args.reduced else REPEATS
     writer = ResultWriter(args.vs_output) if args.vs_output else None
     started = time.monotonic()
+    output = args.output_json or Path(str(args.vs_output) + ".metrics.json")
+    observed = []
+    turn_log = output.with_suffix(".turns.jsonl")
     try:
+        turn_log.write_text("")
         path = model_path()
         tokenizer = PinnedTokenizer.load(path)
         with server_endpoint(Path.cwd(), path) as url:
 
             def observe(row):
                 print(json.dumps({"turn": row}, allow_nan=False), flush=True)
-                if args.output_json:
-                    with args.output_json.with_suffix(".turns.jsonl").open("a") as log:
-                        log.write(json.dumps(row, allow_nan=False) + "\n")
+                observed.append(row)
+                with turn_log.open("a") as log:
+                    log.write(json.dumps(row, allow_nan=False) + "\n")
 
             rows, wall = measure(
                 HttpChat(url),
@@ -56,7 +60,6 @@ def main() -> int:
                 f"Whole benchmark exceeded 600 seconds ({total_wall:.3f}); workload={wall:.3f}"
             )
         values["wall_duration_s"] = total_wall
-        output = args.output_json or Path(str(args.vs_output) + ".metrics.json")
         output.write_text(
             json.dumps(
                 {"metrics": values, "turns": rows, "reduced": args.reduced},
@@ -70,6 +73,20 @@ def main() -> int:
         print(json.dumps(values, allow_nan=False))
         return 0
     except Exception as exc:
+        output.write_text(
+            json.dumps(
+                {
+                    "status": "failed",
+                    "error": f"{type(exc).__name__}: {exc}",
+                    "wall_duration_s": time.monotonic() - started,
+                    "turns": observed,
+                    "reduced": args.reduced,
+                },
+                indent=2,
+                allow_nan=False,
+            )
+            + "\n"
+        )
         if writer:
             writer.error(f"{type(exc).__name__}: {exc}")
         print(f"Benchmark failed: {exc}", file=sys.stderr)
