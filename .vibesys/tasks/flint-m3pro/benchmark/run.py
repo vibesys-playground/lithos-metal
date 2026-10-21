@@ -9,6 +9,7 @@ import sys
 import time
 from pathlib import Path
 
+from budget import deadline_guard
 from core import REPEATS, measure, summarize
 from launcher import HttpChat, PinnedTokenizer, model_path, server_endpoint
 from vs_protocol import ResultWriter
@@ -35,43 +36,44 @@ def main() -> int:
     observed = []
     turn_log = output.with_suffix(".turns.jsonl")
     try:
-        turn_log.write_text("")
-        path = model_path()
-        tokenizer = PinnedTokenizer.load(path)
-        with server_endpoint(Path.cwd(), path) as url:
+        with deadline_guard(600):
+            turn_log.write_text("")
+            path = model_path()
+            tokenizer = PinnedTokenizer.load(path)
+            with server_endpoint(Path.cwd(), path) as url:
 
-            def observe(row):
-                print(json.dumps({"turn": row}, allow_nan=False), flush=True)
-                observed.append(row)
-                with turn_log.open("a") as log:
-                    log.write(json.dumps(row, allow_nan=False) + "\n")
+                def observe(row):
+                    print(json.dumps({"turn": row}, allow_nan=False), flush=True)
+                    observed.append(row)
+                    with turn_log.open("a") as log:
+                        log.write(json.dumps(row, allow_nan=False) + "\n")
 
-            rows, wall = measure(
-                HttpChat(url),
-                tokenizer,
-                time.monotonic,
-                repeats=repeats,
-                observe=observe,
+                rows, wall = measure(
+                    HttpChat(url),
+                    tokenizer,
+                    time.monotonic,
+                    repeats=repeats,
+                    observe=observe,
+                )
+            values = summarize(rows, wall, repeats=repeats)
+            total_wall = time.monotonic() - started
+            if total_wall > 600:
+                raise ValueError(
+                    f"Whole benchmark exceeded 600 seconds ({total_wall:.3f}); workload={wall:.3f}"
+                )
+            values["wall_duration_s"] = total_wall
+            output.write_text(
+                json.dumps(
+                    {"metrics": values, "turns": rows, "reduced": args.reduced},
+                    indent=2,
+                    allow_nan=False,
+                )
+                + "\n"
             )
-        values = summarize(rows, wall, repeats=repeats)
-        total_wall = time.monotonic() - started
-        if total_wall > 600:
-            raise ValueError(
-                f"Whole benchmark exceeded 600 seconds ({total_wall:.3f}); workload={wall:.3f}"
-            )
-        values["wall_duration_s"] = total_wall
-        output.write_text(
-            json.dumps(
-                {"metrics": values, "turns": rows, "reduced": args.reduced},
-                indent=2,
-                allow_nan=False,
-            )
-            + "\n"
-        )
-        if writer:
-            writer.result(values)
-        print(json.dumps(values, allow_nan=False))
-        return 0
+            if writer:
+                writer.result(values)
+            print(json.dumps(values, allow_nan=False))
+            return 0
     except Exception as exc:
         output.write_text(
             json.dumps(
