@@ -1,5 +1,7 @@
 """Capacity growth reuses immutable packed weights and checks every old table bit."""
 
+import json
+
 import numpy as np
 import pytest
 
@@ -42,7 +44,8 @@ def test_shape_and_dtype_changes_fail(tmp_path, values, dtype):
         extended_tables(PackFile(tmp_path), {"positions": (dtype, values)})
 
 
-def test_compile_large_context_from_small_pack(tmp_path):
+@pytest.mark.parametrize("capacity", [32, 32768])
+def test_compile_large_context_from_small_pack(tmp_path, capacity):
     # Public model/checkpoint fixture; no model weights or Metal are loaded.
     from monolith.backends.metal import load_configs
     from monolith.compiler import compile_program
@@ -53,6 +56,10 @@ def test_compile_large_context_from_small_pack(tmp_path):
     from tests.contract.test_flint_package import write_checkpoint
 
     write_checkpoint(tmp_path)
+    config_path = tmp_path / "config.json"
+    config = json.loads(config_path.read_text())
+    config["max_position_embeddings"] = capacity
+    config_path.write_text(json.dumps(config))
     small = FlintModel.from_checkpoint(tmp_path, max_context=8)
     root = tmp_path / "pack"
     pack_model(
@@ -63,13 +70,13 @@ def test_compile_large_context_from_small_pack(tmp_path):
         extra={"options": {"max_context": 8}},
     )
     before = {p.name: p.read_bytes() for p in root.iterdir()}
-    large = FlintModel.from_checkpoint(tmp_path, max_context=32)
+    large = FlintModel.from_checkpoint(tmp_path, max_context=capacity)
     assert (
         ensure_pack(
             tmp_path,
             large,
             root,
-            capacity=32,
+            capacity=capacity,
             layout=PackLayout(),
             backend="m3_pro",
             read_only=True,
@@ -81,10 +88,20 @@ def test_compile_large_context_from_small_pack(tmp_path):
         program = compile_program(
             large, PackFile(root), profile, t=1, dynamic_t=dynamic, commute_norm=False
         )
-        assert program.context_capacity == 32
+        assert program.context_capacity == capacity
         for name, (_, values) in large.tables().items():
             spec = program.buffers["computed." + name]
             assert spec.init == values.tobytes() and spec.file is None
+        rotary = [
+            op
+            for op in program.ops
+            if op.name == "causal_attention"
+            and program.kernels[op.kernel].macros["ROTARY"] == "1"
+        ]
+        assert rotary
+        for op in rotary:
+            assert (5, "computed.causal_rope_cos", 0) in op.bindings
+            assert (6, "computed.causal_rope_sin", 0) in op.bindings
     assert before == {p.name: p.read_bytes() for p in root.iterdir()}
 
 
