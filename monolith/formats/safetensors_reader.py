@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import os
 import struct
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Dict, Iterator, List, Mapping, Tuple
 
@@ -27,6 +27,7 @@ class TensorInfo:
     start: int
     end: int
     file: Path
+    format: str = ""  # optional package-declared interpretation of ambiguous packed storage
 
 
 def read_header(path: str | Path) -> Tuple[Dict[str, TensorInfo], Mapping[str, str]]:
@@ -46,9 +47,15 @@ class SafetensorsDir:
     """All shards of a checkpoint directory (or one file); tensors are memory-mapped on access. ``rename`` maps
     the stored names to the names the model package expects (a checkpoint written by another tool); ``adapt``
     (``(name, array, info) → array``, applied by ``get`` under the package's names) maps stored values to the
-    package's convention (a tool that folds a constant into a tensor), keeping the stored dtype."""
+    package's convention (a tool that folds a constant into a tensor), keeping the stored dtype.
+    ``views(info)`` yields named, typed byte views, for splitting stacked matrices
+    or reinterpreting packed words without copying. Views follow renaming and
+    must describe exactly their shape/dtype bytes within the source range.
+    A view may declare a format hint when packed bytes alone are ambiguous.
+    Duplicate names and out-of-bounds views fail before any tensor is mapped.
+    """
 
-    def __init__(self, path: str | Path, rename=None, adapt=None) -> None:
+    def __init__(self, path: str | Path, rename=None, adapt=None, views=None) -> None:
         p = Path(path)
         files: List[Path]
         if p.is_file():
@@ -66,7 +73,23 @@ class SafetensorsDir:
         for f in files:
             infos, _ = read_header(f)
             if rename is not None:
-                infos = {rename(k): v for k, v in infos.items()}
+                infos = {rename(k): replace(v, name=rename(k)) for k, v in infos.items()}
+            if views is not None:
+                expanded = {}
+                for source in infos.values():
+                    for view in views(source):
+                        expected = int(np.prod(view.shape)) * np.dtype(_NP[view.dtype]).itemsize
+                        if (any(type(dim) is not int or dim < 0 for dim in view.shape)
+                                or view.file != source.file or view.start < source.start or view.end > source.end
+                                or view.end - view.start != expected or view.start > view.end):
+                            raise ValueError(f"checkpoint view {view.name!r} escapes source {source.name!r} or has invalid shape")
+                        if view.name in expanded:
+                            raise ValueError(f"duplicate checkpoint view {view.name!r}")
+                        expanded[view.name] = view
+                infos = expanded
+            overlap = self.infos.keys() & infos.keys()
+            if overlap:
+                raise ValueError(f"duplicate checkpoint tensor {min(overlap)!r}")
             self.infos.update(infos)
         self._maps: Dict[Path, np.memmap] = {}
         self._adapt = adapt

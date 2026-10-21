@@ -208,6 +208,7 @@ class Model(Module):
     config: Any = None
     tap_values: Dict[int, Value] = {}
     checkpoint_rename: Any = None       # a package's map from a checkpoint's tensor names to the HF names it declares
+    checkpoint_views: Any = None        # zero-copy storage/stacked-tensor views declared by a model
     checkpoint_adapt: Any = None        # … and from stored values to the convention it declares (SafetensorsDir(adapt=))
 
     def layers(self) -> Sequence[Module]:

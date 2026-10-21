@@ -83,7 +83,7 @@ def _requantize(tree, a, extra) -> None:
     from monolith.nn.pack_plan import bind_formats
 
     keep = tuple(k for k in (a.quantize_keep or "").split(",") if k)
-    ckpt = SafetensorsDir(a.model, rename=getattr(tree, "checkpoint_rename", None), adapt=getattr(tree, "checkpoint_adapt", None))
+    ckpt = SafetensorsDir(a.model, rename=getattr(tree, "checkpoint_rename", None), adapt=getattr(tree, "checkpoint_adapt", None), views=getattr(tree, "checkpoint_views", None))
     try:
         bound = bind_formats(tree, ckpt, requantize=a.quantize, keep=keep)
     finally:
