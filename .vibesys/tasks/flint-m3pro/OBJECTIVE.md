@@ -86,9 +86,13 @@ min/max/standard deviation, TTFT min/max and measured wall time. The JSON
 sidecar records every turn's context length, rate and any reported cache-token
 count. Cache counts are diagnostic and may be absent in the current server.
 Metrics must not rely on a claimed cache hit instead of measured latency.
-The complete measured workload must finish within 600 seconds. Weight hashing,
-loading, packing and startup warmup are outside that interval and have a
-separate 900-second startup guard. If baseline prefill cannot meet the budget,
+The whole benchmark command, including weight hashing, loading, packing,
+startup warmup, requests and shutdown, must finish within 600 seconds to
+produce a score. `wall_duration_s` reports that interval;
+`workload_duration_s` reports the request workload alone. Throughput and
+TTFT use per-request timings, so startup does not distort those objectives.
+The launcher also has a separate 900-second startup hang guard for the
+accuracy checker. If baseline prefill cannot meet the budget,
 report that failure; do not shorten or silently retune the workload.
 
 ## Candidate contract
@@ -101,6 +105,11 @@ python3 -m monolith.serve --model "$FLINT_MODEL_PATH" \
   --local-files-only --no-draft --served-model-name flint \
   --max-context 32768 --keep-warm 0 --host 127.0.0.1 --port PORT
 ```
+
+An operator may supply `FLINT_PACK_PATH`; the launcher then appends
+`--pack PATH` to reuse a compatible existing pack or shared pack cache. The
+engine must validate its weight, layout and context identity. This changes
+asset location, never the numerical contract.
 
 Preserve these CLI options and the existing serving endpoints:
 

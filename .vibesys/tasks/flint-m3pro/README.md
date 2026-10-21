@@ -23,7 +23,17 @@ Wait for the shared download to finish. Do not create a second weight copy.
 or hardlinks to its files. The evaluator requires identical cached files and
 verifies every file's SHA-256 against `reference/checkpoint.json`, taken from
 the pinned checkpoint's `flint-int4.json`. Personal paths are not committed.
-Weight validation is outside measured benchmark wall time.
+Weight validation is outside per-request timing but inside the whole benchmark
+wall-time budget. Both whole-command and request-workload durations are reported.
+
+`FLINT_PACK_PATH` may point to a compatible existing lithos-metal pack or the
+shared pack-cache directory. The launcher passes it as `--pack`; lithos-metal
+validates compatibility. Otherwise the engine uses its default cache under
+`$XDG_CACHE_HOME/lithos-metal/packs` (or the normal user cache). Reuse the
+model-port handoff's pack if compatible with 32768 context. Do not fill the
+disk with a second packed copy; check free space before baseline startup. A
+9216-context pack is not assumed compatible with 32768. Never bypass engine
+pack validation or substitute a pack from different weights.
 
 From the candidate repository root, with the active source-build environment:
 

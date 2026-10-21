@@ -16,6 +16,7 @@ METRICS = {
     "ttft_turn2plus_min_ms": {"unit": "ms"},
     "ttft_turn2plus_max_ms": {"unit": "ms"},
     "wall_duration_s": {"unit": "s"},
+    "workload_duration_s": {"unit": "s"},
     **{f"bucket_{i}_decode_tokens_per_second": {"unit": "tok/s"} for i in range(3)},
     **{f"bucket_{i}_decode_spread_tokens_per_second": {"unit": "tok/s"} for i in range(3)},
 }

@@ -192,6 +192,7 @@ def summarize(rows: list[dict], wall: float) -> dict[str, float]:
         "ttft_turn2plus_min_ms": min(latencies),
         "ttft_turn2plus_max_ms": max(latencies),
         "wall_duration_s": wall,
+        "workload_duration_s": wall,
     }
     for bucket in range(3):
         group = [r["decode_tokens_per_second"] for r in rows if r["bucket"] == bucket]

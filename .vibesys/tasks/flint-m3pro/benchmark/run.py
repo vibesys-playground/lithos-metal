@@ -22,12 +22,17 @@ def main() -> int:
     if args.vs_output is None and args.output_json is None:
         parser.error("--vs-output or --output-json is required")
     writer = ResultWriter(args.vs_output) if args.vs_output else None
+    started = time.monotonic()
     try:
         path = model_path()
         tokenizer = PinnedTokenizer.load(path)
         with server_endpoint(Path.cwd(), path) as url:
             rows, wall = measure(HttpChat(url), tokenizer, time.monotonic)
         values = summarize(rows, wall)
+        total_wall = time.monotonic() - started
+        if total_wall > 600:
+            raise ValueError(f"Whole benchmark exceeded 600 seconds ({total_wall:.3f}); workload={wall:.3f}")
+        values["wall_duration_s"] = total_wall
         output = args.output_json or Path(str(args.vs_output) + ".metrics.json")
         output.write_text(
             json.dumps({"metrics": values, "turns": rows}, indent=2, allow_nan=False) + "\n"

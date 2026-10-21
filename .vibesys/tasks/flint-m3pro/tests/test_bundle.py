@@ -174,6 +174,8 @@ class WorkloadTests(unittest.TestCase):
         for flag in ("--no-draft", "--local-files-only", "--max-context", "--keep-warm"):
             self.assertIn(flag, argv)
         self.assertNotIn("mlx", " ".join(argv))
+        cached = launch_argv(Path("checkpoint"), 1234, Path("shared-pack"))
+        self.assertEqual(cached[-2:], ["--pack", "shared-pack"])
 
 
 class StreamTests(unittest.TestCase):

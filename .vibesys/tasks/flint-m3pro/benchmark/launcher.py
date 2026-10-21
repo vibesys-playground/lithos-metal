@@ -130,8 +130,8 @@ class HttpChat:
         return body
 
 
-def launch_argv(path: Path, port: int) -> list[str]:
-    return [
+def launch_argv(path: Path, port: int, pack_path: Path | None = None) -> list[str]:
+    argv = [
         sys.executable,
         "-m",
         "monolith.serve",
@@ -152,6 +152,9 @@ def launch_argv(path: Path, port: int) -> list[str]:
         "--port",
         str(port),
     ]
+    if pack_path is not None:
+        argv.extend(["--pack", str(pack_path)])
+    return argv
 
 
 @contextlib.contextmanager
@@ -171,8 +174,9 @@ def server_endpoint(workspace: Path, path: Path):
             with socket.socket() as probe:
                 probe.bind(("127.0.0.1", 0))
                 port = probe.getsockname()[1]
+            pack = os.environ.get("FLINT_PACK_PATH")
             proc = subprocess.Popen(
-                launch_argv(path, port),
+                launch_argv(path, port, Path(pack).expanduser() if pack else None),
                 cwd=workspace,
                 stdout=log,
                 stderr=subprocess.STDOUT,
