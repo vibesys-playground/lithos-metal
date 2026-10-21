@@ -23,7 +23,7 @@ from pydantic import ValidationError
 
 from . import __version__
 
-from .serving.protocol import (APIError, ChatRequest, Message, TextPart, anthropic_request, keep_alive_seconds,
+from .serving.protocol import (APIError, ChatRequest, Message, TextPart as TextPart, anthropic_request, keep_alive_seconds,
                                ollama_model, ollama_request, responses_request, parse_completion, streaming_text)
 from .serving.events import WireResponse, ollama_time
 from .serving.lifecycle import FifoLock, IdleRelease, ModelLoadError, ModelState

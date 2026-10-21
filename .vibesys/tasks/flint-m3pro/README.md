@@ -27,14 +27,12 @@ the pinned checkpoint's `flint-int4.json`. Personal paths are not committed.
 Weight validation is outside per-request timing but inside the whole benchmark
 wall-time budget. Both whole-command and request-workload durations are reported.
 
-`FLINT_PACK_DIR` may point to a compatible existing lithos-metal pack or the
-shared pack-cache directory. The launcher passes it as `--pack`; lithos-metal
-validates compatibility. Otherwise the engine uses its default cache under
-`$XDG_CACHE_HOME/lithos-metal/packs` (or the normal user cache). Reuse the
-model-port handoff's pack if compatible with 32768 context. Do not fill the
-disk with a second packed copy; check free space before baseline startup. A
-9216-context pack is not assumed compatible with 32768. Never bypass engine
-pack validation or substitute a pack from different weights.
+The launcher resolves the existing shared pack using `FLINT_PACK_DIR` and
+always requires read-only reuse. The default location, disk admission and layout
+migration contract are in `OBJECTIVE.md`, under Candidate contract. Missing or
+incompatible packs fail before any automatic packing. Capacity-dependent F32
+position tables can extend in memory after exact packed-prefix verification.
+No weight pack is copied or created by the evaluator.
 
 From the candidate repository root, with the active source-build environment:
 
@@ -43,6 +41,9 @@ python3 -m unittest discover -s .vibesys/tasks/flint-m3pro/tests -v
 lockf -k /tmp/flint-gpu.lock python3 .vibesys/tasks/flint-m3pro/accuracy_checker/checker.py
 lockf -k /tmp/flint-gpu.lock python3 .vibesys/tasks/flint-m3pro/benchmark/run.py \
   --vs-output /tmp/flint-results.jsonl --output-json /tmp/flint-metrics.json
+# Operator-only reduced measurement, without publishing a score:
+lockf -k /tmp/flint-gpu.lock python3 .vibesys/tasks/flint-m3pro/benchmark/run.py \
+  --reduced --output-json /tmp/flint-reduced.json
 ```
 
 If no model-port goldens exist, clone the independent rec reference outside
@@ -65,8 +66,8 @@ as a serving dependency. The reference never uses `Model.make_cache`, whose
 full-attention defaults quantize KV. Pins have fixed provenance and thresholds;
 the task offers no `--skip-pins`, external-server or custom-launch bypass.
 The pin endpoint requires raw `completion_token_ids` because Flint emits
-special tokens that the server strips from text. The model-port server needs
-that response extension before its baseline can pass this exact-ID gate.
+special tokens that the server strips from text. The request sets `return_token_ids=true`; this extension reports the actual
+runtime sequence, including special tokens.
 
 VibeSys launch, from a VibeSys checkout with this external repository fetched:
 

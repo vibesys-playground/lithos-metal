@@ -99,3 +99,24 @@ class PackPolicyTests(unittest.TestCase):
             write_identity(pack)
             with self.assertRaisesRegex(ValueError, "incomplete"):
                 resolve_pack(home / "worktree", {}, home, free_bytes=2**60)
+
+    def test_storage_identity_mismatch_fails_closed(self):
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp)
+            pack = default_pack_dir(home).resolve()
+            pack.mkdir(parents=True)
+            (pack / "manifest.json").write_text(json.dumps({"nbytes": 3}))
+            (pack / "weights.pack").write_bytes(b"abc")
+            for metadata, message in (
+                ({"key": "0" * 64}, "authorized shared pack key"),
+                (
+                    {"key": PACK_KEY, "identity": {"manifest_sha256": "0" * 64}},
+                    "storage identity",
+                ),
+            ):
+                (pack / "pack-key.json").write_text(json.dumps(metadata))
+                with self.assertRaisesRegex(ValueError, message):
+                    resolve_pack(home / "worktree", {}, home, free_bytes=2**60)
+            (pack / "pack-key.json").unlink()
+            with self.assertRaisesRegex(ValueError, "pack-key.json"):
+                resolve_pack(home / "worktree", {}, home, free_bytes=2**60)
