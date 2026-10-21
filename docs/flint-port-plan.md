@@ -34,9 +34,9 @@ Logs are local untracked `.agent-logs/`. Each passing commit is pushed only to `
 | Q/K/V and output projections | `nn.Linear` / affine INT4 | Reuse checkpoint codes, scale/bias and row permutations |
 | Dense first layers | `nn.GatedMLP`, `nn.DecoderLayer` | Reuse SiLU gated MLP and residual order |
 | Routed expert projections | `nn.Experts`, `moe_gemv` | Generalize checkpoint adapter for stacked tensors; same selected-expert mechanism |
-| Expert selection | `moe_route` | Generalize score function to sigmoid with separate selection bias; retain existing softmax default |
-| Shared expert | `nn.SparseMoE`, `moe_combine` | Generalize optional gate; Flint shared expert has none |
-| Full/sliding attention | shared attention layer/operation | Generalize with window parameter; absolute-position cache first, no ring optimization |
+| Expert selection | `moe_route` | New shared `sigmoid_route`: distinct scoring/rounding contract preserves existing softmax behavior; bias is unsupported and rejected |
+| Shared expert | `nn.Experts`, `nn.Linear` | New shared `SigmoidMoE` and separately rounded `moe_sum`; reuse projections without a gate-specific optional interface |
+| Full/sliding attention | `GQAAttention` projection/cache mechanisms | New shared `CausalAttention`/`causal_attention` arithmetic contract with a window parameter; legacy attention rounds scores/probabilities differently |
 | Learned sinks | shared attention operation | New explicit optional per-head sink input; sink contributes denominator only |
 | Attention without RoPE | shared attention operation | Explicit disabled rotary contract; no fake rotary tables |
 | Embedding | `nn.Embedding` | Reuse gather, add unsigned affine INT8 format because symmetric INT8 changes weights |
@@ -69,3 +69,14 @@ No changes to other model packages are intended except mechanical migrations req
 
 Correctness gates: contract tier, leaf kernel oracle comparisons and shader validation, real layer agreement,
 then exact greedy golden tokens. No baseline or serving success is claimed before those gates pass.
+
+## Qualification stop
+
+The plan was committed within the first 15 minutes. Shared contracts, kernel
+oracles and real first-three-layer checks passed. A static-position binding bug
+was fixed with a regression that fails at the pre-fix shared-operation commit.
+After that correction, the first 64-token continuation matched exactly; the
+second diverged at index 48. Work stopped at the numerical gate as requested.
+No comparisons were loosened, and serving/baseline work was not executed.
+The single full weight pack was moved to the shared cache documented in the
+handoff; no second full pack or checkpoint copy was created.
