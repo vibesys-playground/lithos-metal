@@ -311,3 +311,12 @@ A real reference-only free-running check also diverges: fixture 1, BF16 prompt
 ingested one token at a time instead of the canonical whole-prompt prefill,
 first divergence **44/64**. Post-divergence token mismatch count is 20/64;
 those later tokens are a different trajectory, not independent numerical errors.
+
+The gate will additionally require top-1 equality above twice the largest
+reference margin at an **observed reference-to-reference winner change**. This
+is a stricter empirical stability check than the conservative top-two gap-error
+bound; retain both measurements. For the complete 1k BF16 ordering comparison,
+the observed maximum flip margin is 0.15625, giving an initial 0.3125 threshold
+and 98.6328125% stable-position coverage. The final threshold uses the entire
+fixed reference calibration family, including long contexts, rather than this
+single preliminary pair. No native margin participates in setting it.
