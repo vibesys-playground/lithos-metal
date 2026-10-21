@@ -276,3 +276,14 @@ is not evidence. The checker must compute metrics itself, reject missing rows,
 non-finite values, changed routing cardinality and provenance/shape mismatches,
 and run a known semantic mutation through the same frozen thresholds. This
 continuation will record whether disabling attention sinks is rejected.
+
+Layer-local qualification also replays each decoder block on its reference's
+own previous residual, so an earlier routing flip cannot be mistaken for a bug
+in a later operation. The short-prefix arithmetic calibration family is fixed
+as BF16 chunk sizes `[1, 2, 4, 8, 16, 32, 64, 128]`, the canonical golden schedule,
+and FP32. All configurations count; no favorable subset may be selected.
+This covers the finite power-of-two GEMV/GEMM/attention ordering family used by
+the diagnostic rather than treating one reference pair as an exhaustive bound.
+Long-context comparisons use BF16 32-row chunks and FP32 32-row chunks, plus
+the complete 1k BF16 one-row trace. All are exact widenings or execution-order
+changes of the same checkpoint, never requantizations.
