@@ -97,3 +97,21 @@ def test_read_only_missing_pack_never_creates_directory(tmp_path):
             read_only=True,
         )
     assert not root.exists()
+
+
+@pytest.mark.parametrize("metadata_bytes", [2, 16, 100])
+def test_metadata_uses_the_admitted_margin_without_rejecting_a_full_weight_pack(
+    tmp_path, metadata_bytes
+):
+    cache = SharedPackCache(
+        tmp_path / "extra",
+        pinned=tmp_path / "pinned",
+        pack_bytes=7,
+        margin_bytes=metadata_bytes,
+    )
+
+    def build(path):
+        (path / "weights.pack").write_bytes(b"weights")
+        (path / "manifest.json").write_bytes(b" " * metadata_bytes)
+
+    assert cache.resolve("a" * 64, build).is_dir()

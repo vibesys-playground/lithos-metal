@@ -108,9 +108,12 @@ class SharedPackCache:
                     or not (temporary / "weights.pack").is_file()
                 ):
                     raise ValueError("Builder did not produce a complete shared pack")
+                total_bytes = sum(
+                    p.stat().st_size for p in temporary.rglob("*") if p.is_file()
+                )
                 if (
-                    sum(p.stat().st_size for p in temporary.rglob("*") if p.is_file())
-                    > self.pack_bytes
+                    (temporary / "weights.pack").stat().st_size > self.pack_bytes
+                    or total_bytes > self.pack_bytes + self.margin_bytes
                 ):
                     raise ValueError("Built pack exceeds admitted size")
                 temporary.rename(destination)
