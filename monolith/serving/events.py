@@ -23,7 +23,7 @@ def ollama_time(seconds=None):
 
 
 class WireResponse:
-    def __init__(self, protocol, model, custom=(), usage=None):
+    def __init__(self, protocol, model, custom=(), usage=None, *, started=None, now=time.perf_counter):
         self.protocol, self.model, self.custom = protocol, model, custom
         # Chat only: None omits usage from chunks, 'final' sends usage: null,
         # 'continuous' a cumulative snapshot of output_tokens (vLLM's extension).
@@ -38,7 +38,8 @@ class WireResponse:
         self.text = ''
         self.text_started = False
         self.tool_calls = []
-        self.started = time.perf_counter()
+        self.now = now
+        self.started = now() if started is None else started
         self.metrics = {}                  # the backend's timings for this request (Ollama's durations)
 
     def event(self, kind, **data):
@@ -80,7 +81,7 @@ class WireResponse:
     def ollama_stats(self, prompt_tokens, completion_tokens):
         ns = lambda ms: int(max(0.0, ms or 0.0) * 1e6)
         prefill_ms = self.metrics.get('prefill_wall_ms', 0.0)
-        return {'total_duration': int((time.perf_counter() - self.started) * 1e9),
+        return {'total_duration': int((self.now() - self.started) * 1e9),
                 'load_duration': ns(self.metrics.get('load_ms', 0.0) + self.metrics.get('setup_ms', 0.0)), 'prompt_eval_count': prompt_tokens,
                 'prompt_eval_duration': ns(prefill_ms), 'eval_count': completion_tokens,
                 'eval_duration': ns(self.metrics.get('decode_wall_ms'))}

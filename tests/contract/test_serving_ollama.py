@@ -413,24 +413,23 @@ def test_ollama_accepts_any_number_of_stop_strings():
     assert client.post('/api/chat', json=chat(stream=False, options={'stop': ['']})).status_code == 400
 
 
-def test_total_duration_includes_the_queue():
-    entered, release = threading.Event(), threading.Event()
-    def complete(request, **_):
-        if not entered.is_set():
-            entered.set()
-            assert release.wait(5)
-        return 'ok', 'stop', 1, 1
-    client = TestClient(create_app(SimpleNamespace(complete=complete, last_metrics={}), 'local'))
-    first = threading.Thread(target=lambda: client.post('/api/chat', json=chat(stream=False)))
-    first.start()
-    assert entered.wait(5)
-    queued = []
-    second = threading.Thread(target=lambda: queued.append(client.post('/api/chat', json=chat(stream=False)).json()))
-    second.start()
-    time.sleep(.3)
-    release.set()
-    first.join(5)
-    second.join(5)
-    assert queued[0]['total_duration'] >= 250_000_000
+@pytest.mark.parametrize('queued', [0, 1, 5])
+@pytest.mark.parametrize('execution', [1, 4, 8])
+def test_total_duration_includes_the_queue(queued, execution):
+    from monolith.serving.events import WireResponse
 
+    class Clock:
+        value = 0
+        def now(self):
+            return self.value
 
+    clock = Clock()
+    arrived = clock.now()
+    clock.value += queued
+    wire = WireResponse('ollama', 'local', started=arrived, now=clock.now)
+    clock.value += execution
+    wire.metrics = {'prefill_wall_ms': execution * 500, 'decode_wall_ms': execution * 500}
+    body = wire.body({'role': 'assistant', 'content': 'ok'}, 'stop', 1, 1)
+    assert body['total_duration'] == (queued + execution) * 1_000_000_000
+    assert body['prompt_eval_duration'] == execution * 500_000_000
+    assert body['eval_duration'] == execution * 500_000_000

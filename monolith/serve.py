@@ -512,8 +512,8 @@ def create_app(backend, model_name, api_key=None):
         def release():
             admitted.close()
             lock.release()
-        wire = WireResponse(protocol, model_name, custom, request.stream_usage if request.stream else None)
-        wire.started = arrived
+        wire = WireResponse(protocol, model_name, custom, request.stream_usage if request.stream else None,
+                            started=arrived)
         if request.stream:
             return stream(request, wire, release, options)
         try:
