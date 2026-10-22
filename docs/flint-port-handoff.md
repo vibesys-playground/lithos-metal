@@ -342,3 +342,34 @@ pointwise ratio to one reference comparison is not an accumulation model: a
 discrete near-tie route can amplify an ordinary BF16 rounding difference. The
 fixed full reference family, all-layer routing statistics and whole-model
 limits remain necessary; these local ratios do not adjust any threshold.
+
+### Complete native long-context traces (18:10 PDT)
+
+All positions, all 49 attention/MLP residuals, all 47 expert sets/router logits,
+and the full vocabulary were compared with the same fixed token prefixes.
+Native uses 32-row prompt execution throughout.
+
+| Positions | Max logit absolute error | Max relative L2 | Minimum cosine | Top-1 differences | Largest differing reference margin |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 1024 | 11.625 | 0.0826342471 | 0.9976552268 | 2 | 0.1328125 |
+| 4096 | 15.25 | 0.1631335807 | 0.9971077043 | 2 | 0.1328125 |
+| 16384 | 17.0 | 0.1643629911 | 0.9971077043 | 2 | 0.1328125 |
+
+At 16k, pooled exact expert-set agreement is 0.552222719 and expert overlap is
+0.889575931; the worst layer is 0.333801270 / 0.807779948. These require comparison
+with the complete independent reference family; they are not standalone
+acceptance thresholds. All 24,832 per-tensor chunk comparison records from the
+first 4k positions match the separate 4k-capacity run exactly.
+
+The fixed reference calibration family is still incomplete at this checkpoint.
+In particular, the partial 4k layer-1 attention cosine budget is 0.00202890485,
+while native is 0.00227631348. Do not qualify the port or increase that budget
+from candidate measurements. The remaining predeclared reference configurations
+and 16k FP32 comparison must decide the final bound.
+
+Run resource policy: `.agent-logs` is capped at 20 GB, with at least 20 GiB free
+before each new batch. Completed raw arrays are deleted after their final
+comparison; JSON metrics and metadata remain. At 18:10 it occupies about 8.3 GiB.
+The remaining canonical short traces and 16k reference archive are retained only
+for pending comparisons. At most one GPU-lock command from this thread is
+submitted at a time, allowing the other benchmark commands to interleave.
