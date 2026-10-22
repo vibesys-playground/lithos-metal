@@ -295,8 +295,9 @@ environment built from the candidate's own `uv.lock`.
 `check_host.sh` first, then `uv sync --locked --extra serve
 --no-install-project --python 3.12` into
 `$HOME/.cache/lithos-metal/task-env/<sha256 of uv.lock>`. The interpreter is
-that directory's `bin/python`. CMake is `bin/cmake` beside it. Task commands
-invoke those paths. They do not use the VibeSys virtualenv or PATH. An
+that directory's `bin/python`, used as that path. It is a symlink, and
+following it drops the environment. CMake is `bin/cmake` beside it. Task
+commands invoke those paths. They do not use the VibeSys virtualenv or PATH. An
 unchanged lock reuses the directory. A dependency change must be committed in
 `uv.lock`. `--locked` fails with a message that says so, and does not update
 the lock or resolve new dependencies. `uv sync --frozen` is not used: uv 0.8
@@ -325,6 +326,22 @@ VibeSys write allowance for `$HOME/.cache/lithos-metal/task-env` and
 and can create the environment; after it exists the agent can read and
 execute it.
 
+The request-factory adapter starts `benchmark/run.py` on the evaluator's
+interpreter. That file switches to `bin/python` before it imports the task
+modules, so an older ambient interpreter (macOS `/usr/bin/python3` is 3.9)
+never loads them. Accuracy goes through `setup_env.sh`, which makes the same
+switch before the checker.
+
+On 2026-10-21 a fresh clone of `vibesys` at `15e96f2` was run with
+`PATH=/usr/bin:/bin`. That PATH has no cmake. Setup printed the cache
+`bin/python`. Accuracy, including a cold native build, took 332.22 seconds
+and passed the interim gate: 4 probes, 4 pins, 2 repeat passes, 1024 logit
+rows, max abs logit 11.625, relative L2 0.082634, cosine 0.997655, two top-1
+mismatches at margin 0.1328125. The quick benchmark, started by the
+request-factory adapter on `/usr/bin/python3`, took 239.85 seconds, exit 0,
+and completed 2 of 2 requests with no timeouts (decode 19.73 tokens/s,
+startup 172.4 seconds, scored window 66.9 seconds).
+
 To reproduce via the existing evaluator package, let `RF_ADAPTER` point to
 its installed `adapter.py` and `RF_ENGINE` to its pinned tool binary:
 
@@ -339,10 +356,12 @@ python3 "$RF_ADAPTER" --engine "$RF_ENGINE" -- \
 
 ## Verification and qualification
 
-30 hermetic task tests pass, covering the unchanged gate's injected wrong
+54 hermetic task tests pass, covering the unchanged gate's injected wrong
 output rejection, pack provenance, protocol v2, fixed denominators, late
 completion censoring, pre-deadline failures, summary mapping and asynchronous
-writer skew. Tests use deterministic RF-shaped records, injected timer/transport
+writer skew, plus tool resolution, the locked-environment failure, and
+importing the benchmark on the system Python without loading task modules.
+Tests use deterministic RF-shaped records, injected timer/transport
 Fakes and temporary files; no sleeps or real model execution.
 
 VibeSys format and lint scripts pass. Both tasks pass `vibesys validate`,
