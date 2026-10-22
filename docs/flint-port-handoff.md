@@ -1,6 +1,6 @@
 # Flint port handoff
 
-## Continuation checkpoint — 2026-10-21 18:32 PDT
+## Time-boxed continuation handoff — 2026-10-21 18:58 PDT
 
 **Still unqualified: the fixed reference calibration and final gate are incomplete.**
 Native teacher-forced comparisons are complete at 1024, 4096 and 16384 positions.
@@ -18,13 +18,13 @@ Do not start optimization from a claimed qualified baseline yet.
 No model arithmetic, kernel, recipe, fusion, prefill path or server-startup
 behavior changed in this continuation. The later startup/prefill priority was
 cancelled by the user; speed remains the optimization experiment's work.
-Serving smoke and the requested three-run timing measurements remain pending.
+Serving smoke and the requested three-run timing measurements were not run. No final numeric gate or qualified baseline is published.
 The earlier bundle-reported TTFT 99.5 s / decode 10.2 tok/s are not new
 measurements from this continuation.
 
 Remaining work, in order:
 
-1. Complete the queued FP32 16k reference comparison.
+1. Rerun the interrupted FP32 16k reference comparison to completion. Its partial metrics are not calibration-eligible.
 2. Complete the predeclared BF16 short arithmetic family: example 0 chunks
    64/128, and examples 1/2 chunks 2/4/8/16/64/128. Compare directly against each
    retained canonical trace using `--compare-to`; retain metrics, not raw arrays.
@@ -490,3 +490,29 @@ reaches **0.0637177** native versus **0.0644898** reference-only. These measured
 amplifications support numerical noise for the original short index-48 mismatch;
 they do not waive the separate unresolved long-context cosine criterion. No
 model arithmetic fix is justified by the reported short-prefix difference.
+
+### Final stop and verification
+
+The three-hour wall-clock box ended with the port **unqualified**. The 16k FP32
+reference command waited approximately 45 minutes for the shared GPU and
+acquired it during cleanup; it was interrupted, with no completion marker. Its
+partial JSON is explicitly ineligible for calibration. All native long traces
+are complete, but only **16/31** declared reference-only pairwise comparisons
+and **4/9** planned free-running measurements are complete. No missing result or
+final threshold was invented. The full reference family, final frozen numeric
+limits, serving chat/tool smoke, and three-run 1k/8k baseline remain outstanding.
+
+The short divergence is consistent with measured numerical noise: against the
+same canonical trace, native logit maximum error / relative L2 are **2.0 /
+0.0206952**, versus **2.5 / 0.0308360** from reference BF16 ordering alone. This
+is evidence about that reported near-tie, not a claim that the unresolved
+long-context cosine criterion passes. No model arithmetic was changed.
+
+Verification: **65** attention/boundary/MoE/decode-state cases passed with Metal
+shader validation; **2** dirty-reference CLI regression cases pass now and fail
+against the pre-fix script. Changed Python files pass Ruff lint/format checks,
+and repository hygiene passes. The shared pack manifest remains
+`b01450fe47e91296e7cb7a57f94f795914d954ecbeec4188c9393d28cd0c390c`.
+All owned model processes and lock waiters were stopped, with no lock retained.
+Logs are approximately **8.25 GiB**; only raw canonical/16k reference arrays with
+planned future readers remain. The final reply records the pushed HEAD and date.
