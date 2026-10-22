@@ -221,6 +221,11 @@ def native(args, ids, save):
 
             packer = Packer(args.model, temporary.name)
             for name, (dtype, array) in model.tables().items():
+                original = session.pack.aux_array(name)
+                if not np.array_equal(original, array[: len(original)]):
+                    raise ValueError(
+                        f"{name}: extending capacity changed existing rotary values"
+                    )
                 packer.add_table(TableRequest(name, array, dtype))
             packer.write()
             base = copy.copy(session.pack)

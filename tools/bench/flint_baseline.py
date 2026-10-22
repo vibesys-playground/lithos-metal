@@ -49,6 +49,9 @@ def main():
                     "context": context,
                     "run": run + 1,
                     "decode_tokens": result.decode_tokens,
+                    "setup_ms": result.setup_ms,
+                    "state_reset_ms": result.state_reset_ms,
+                    "prefill_rows": [item["tokens"] for item in result.prefill_timings],
                     "decode_wall_ms": result.decode_wall_ms,
                     "decode_gpu_ms": result.decode_ms,
                     "decode_wall_tokens_per_second": result.decode_tokens
