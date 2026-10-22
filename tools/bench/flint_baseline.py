@@ -18,7 +18,9 @@ def main():
     args = parser.parse_args()
     qualification = json.loads(args.qualification.read_text())
     if not qualification.get("qualified"):
-        raise ValueError("baseline requires successful exact-token qualification")
+        raise ValueError(
+            "baseline requires the completed teacher-forced accuracy qualification"
+        )
     from transformers import AutoTokenizer
 
     tokenizer = AutoTokenizer.from_pretrained(args.model, fix_mistral_regex=False)

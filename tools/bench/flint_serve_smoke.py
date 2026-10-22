@@ -18,12 +18,14 @@ def main():
     parser.add_argument("--pack", required=True)
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
+    if not (Path(args.pack) / "manifest.json").is_file():
+        raise ValueError("serve smoke requires the existing shared weight pack")
     with socket.socket() as port_socket:
         port_socket.bind(("127.0.0.1", 0))
         port = port_socket.getsockname()[1]
     url = f"http://127.0.0.1:{port}"
     command = [
-        str(Path(sys.executable).parent / "lithos-metal"),
+        str(Path(sys.prefix) / "bin/lithos-metal"),
         "serve",
         "--model",
         args.model,
