@@ -148,7 +148,11 @@ Preserve these CLI options and the existing serving endpoints:
   and truthful `usage.prompt_tokens`/`completion_tokens`. Honor
   `stream_options.include_usage` and `continuous_usage_stats`; publish
   completion count 1 at first committed-token availability, then advance it
-  through count 64. Keep-alives and role-only deltas do not count as tokens.
+  through the requested output limit. Keep-alives and role-only deltas do not count as tokens.
+- `POST /v1/completions`: raw token-array prompts, fixed requested output
+  length, greedy decoding and incremental `choices[0].token_ids` in streaming
+  SSE. Report actual `prompt_tokens_details.cached_tokens`; RF's two-request
+  cache probe must succeed. This endpoint uses the same lithos engine.
 - Non-streaming pins use 32 tokens and the same template and greedy path.
   Their requests set `return_token_ids=true`; responses must include a top-level `completion_token_ids` array with
   the raw generated IDs, including special tokens. This is a required

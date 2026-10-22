@@ -140,7 +140,10 @@ def main():
                 rf.wait(timeout=30)
             scored_duration = min(time.time() - replay_started, BUDGET_SECONDS)
             if rf.returncode != 0:
-                raise RuntimeError(f"RF exited {rf.returncode}")
+                raise RuntimeError(
+                    f"RF exited {rf.returncode}: "
+                    + (temporary / "terminal.log").read_text()[-4000:]
+                )
             records = [json.loads(line) for line in log.read_text().splitlines()]
             rf_summary = json.loads(summary.read_text())
             values, turns = summarize(
@@ -162,14 +165,23 @@ def main():
                 identity=identity,
                 total_wall_duration_s=time.monotonic() - started,
             )
-            output.write_text(json.dumps(result, indent=2, allow_nan=False) + "\n")
-            writer.result(values)
-            print(json.dumps(result, allow_nan=False), flush=True)
+        # Publish only after the owned server exits, so whole wall time includes
+        # cleanup on both completed and timed-out paths.
+        result["total_wall_duration_s"] = time.monotonic() - started
+        output.write_text(json.dumps(result, indent=2, allow_nan=False) + "\n")
+        writer.result(values)
+        print(json.dumps(result, allow_nan=False), flush=True)
         return 0
     except Exception as exc:
         writer.error(f"{type(exc).__name__}: {exc}")
         output.write_text(
-            json.dumps({"status": "failed", "error": f"{type(exc).__name__}: {exc}"})
+            json.dumps(
+                {
+                    "status": "failed",
+                    "error": f"{type(exc).__name__}: {exc}",
+                    "total_wall_duration_s": time.monotonic() - started,
+                }
+            )
             + "\n"
         )
         print(f"RF benchmark failed: {exc}", file=sys.stderr)
