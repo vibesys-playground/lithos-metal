@@ -50,7 +50,13 @@ def main():
     started = time.monotonic()
     started_timestamp = time.time()
     rf = None
+    candidate_commit = None
     try:
+        candidate_commit = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], text=True, timeout=10
+        ).strip()
+        with Path(args.request_factory_engine).open("rb") as engine_file:
+            engine_sha256 = hashlib.file_digest(engine_file, "sha256").hexdigest()
         identity = json.loads((root / "trace-identity.json").read_text())
         for name, digest in identity["files"].items():
             if hashlib.sha256((root / name).read_bytes()).hexdigest() != digest:
@@ -164,6 +170,9 @@ def main():
                 raise ValueError("Bootstrap must complete every planned request")
             values.update(startup_duration_s=startup, scored_duration_s=scored_duration)
             result = dict(
+                workload=args.workload,
+                candidate_commit=candidate_commit,
+                request_factory_engine_sha256=engine_sha256,
                 metrics=values,
                 turns=turns,
                 timed_out=timed_out,
@@ -185,6 +194,8 @@ def main():
             json.dumps(
                 {
                     "status": "failed",
+                    "workload": args.workload,
+                    "candidate_commit": candidate_commit,
                     "error": f"{type(exc).__name__}: {exc}",
                     "total_wall_duration_s": time.monotonic() - started,
                 }
