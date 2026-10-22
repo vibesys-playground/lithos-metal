@@ -15,6 +15,8 @@ def main():
     parser.add_argument("--pack", required=True)
     parser.add_argument("--qualification", required=True, type=Path)
     parser.add_argument("--out", required=True, type=Path)
+    parser.add_argument("--context", type=int, choices=(1024, 8192))
+    parser.add_argument("--runs", type=int, choices=(1, 3), default=3)
     args = parser.parse_args()
     qualification = json.loads(args.qualification.read_text())
     if not qualification.get("qualified"):
@@ -41,9 +43,9 @@ def main():
     records = []
     try:
         session.generate(seed, 4, steps_per_cb=1, in_flight=1)
-        for context in (1024, 8192):
+        for context in (args.context,) if args.context else (1024, 8192):
             prompt = (seed * (1 + context // len(seed)))[:context]
-            for run in range(3):
+            for run in range(args.runs):
                 result = session.generate(prompt, 33, steps_per_cb=1, in_flight=1)
                 record = {
                     "context": context,
