@@ -46,9 +46,10 @@ class HostScriptTests(unittest.TestCase):
             )
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("Host check failed:", result.stderr)
-            self.assertIn("FileNotFoundError", result.stderr)
-            self.assertIn(str(task / "reference/checkpoint.json"), result.stderr)
-            self.assertIn("JSONDecodeError", result.stderr)
+            diagnostic = result.stderr.split("Host check failed:", 1)[1]
+            self.assertIn("FileNotFoundError", diagnostic)
+            self.assertIn(str(task / "reference/checkpoint.json"), diagnostic)
+            self.assertIn("JSONDecodeError", diagnostic)
 
 
 if __name__ == "__main__":
