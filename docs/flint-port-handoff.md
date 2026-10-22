@@ -481,3 +481,12 @@ arithmetic path; diagnostic copies may preserve intermediates, but the checker
 must not select an accuracy-only fallback. The same frozen limits must reject
 the measured whole-model no-sink mutation, alongside the independent strict
 2-ULP window/sink/no-RoPE leaf contracts.
+
+[The complete error trajectory at the reported divergence prefix](flint-divergence-prefix.json)
+localizes the largest stage-to-stage gain at **layer 20 MoE MLP**: relative L2
+rises about **4.074×**, reaching **0.0605904** natively; reference-only arithmetic
+changes reach **0.0609752** at that same tensor and position. Layer 46 MLP later
+reaches **0.0637177** native versus **0.0644898** reference-only. These measured
+amplifications support numerical noise for the original short index-48 mismatch;
+they do not waive the separate unresolved long-context cosine criterion. No
+model arithmetic fix is justified by the reported short-prefix difference.

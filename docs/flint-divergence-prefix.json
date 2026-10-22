@@ -1,0 +1,1186 @@
+{
+  "example": 1,
+  "input_position": 56,
+  "greedy_index": 48,
+  "comparison_anchor": "Canonical BF16 prompt prefill then single teacher-forced tokens",
+  "reference_margin": 0.08984375,
+  "scope": "Diagnostic trajectory for the reported prefix, not final calibrated limits. All three reference alternatives count.",
+  "stages": [
+    {
+      "name": "layers.0.self_attn.h",
+      "native_relative_l2": 0.005066565437527502,
+      "native_max_abs": 0.001953125,
+      "native_cosine": 0.9999871666318002,
+      "native_relative_stage_gain": null,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.0,
+        "bf16_chunk32": 0.004870090298004405,
+        "fp32_chunk32": 0.00526149136309365
+      }
+    },
+    {
+      "name": "layers.0.mlp.h",
+      "native_relative_l2": 0.010004561456631774,
+      "native_max_abs": 0.0009765625,
+      "native_cosine": 0.9999499608128584,
+      "native_relative_stage_gain": 1.974623949890999,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.0,
+        "bf16_chunk32": 0.008813104784705188,
+        "fp32_chunk32": 0.009538896548958524
+      }
+    },
+    {
+      "name": "layers.1.self_attn.h",
+      "native_relative_l2": 0.01617143431458628,
+      "native_max_abs": 0.001953125,
+      "native_cosine": 0.999873110225242,
+      "native_relative_stage_gain": 1.6164061148194195,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.0011004802132880468,
+        "bf16_chunk32": 0.013531725574271826,
+        "fp32_chunk32": 0.014298376994074907
+      }
+    },
+    {
+      "name": "layers.1.mlp.h",
+      "native_relative_l2": 0.024645947766542123,
+      "native_max_abs": 0.0029296875,
+      "native_cosine": 0.9997372284913011,
+      "native_relative_stage_gain": 1.5240421651598348,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.004052074253779287,
+        "bf16_chunk32": 0.014970836890095924,
+        "fp32_chunk32": 0.017540478962579733
+      }
+    },
+    {
+      "name": "layers.2.self_attn.h",
+      "native_relative_l2": 0.02006978355840245,
+      "native_max_abs": 0.000732421875,
+      "native_cosine": 0.9998141330864956,
+      "native_relative_stage_gain": 0.8143238697295301,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.0057031205692307805,
+        "bf16_chunk32": 0.015142420812848943,
+        "fp32_chunk32": 0.015614438197165492
+      }
+    },
+    {
+      "name": "layers.2.mlp.h",
+      "native_relative_l2": 0.015320032954814086,
+      "native_max_abs": 0.00048828125,
+      "native_cosine": 0.9998882378022611,
+      "native_relative_stage_gain": 0.7633382248609341,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.006653655965399032,
+        "bf16_chunk32": 0.01271469629339102,
+        "fp32_chunk32": 0.012738934985551677
+      }
+    },
+    {
+      "name": "layers.3.self_attn.h",
+      "native_relative_l2": 0.013620324885847364,
+      "native_max_abs": 0.000244140625,
+      "native_cosine": 0.9999104132338685,
+      "native_relative_stage_gain": 0.8890532367665296,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.0074142888602043815,
+        "bf16_chunk32": 0.012452730963073748,
+        "fp32_chunk32": 0.011202027778089622
+      }
+    },
+    {
+      "name": "layers.3.mlp.h",
+      "native_relative_l2": 0.011764255786669172,
+      "native_max_abs": 0.000152587890625,
+      "native_cosine": 0.9999308068809372,
+      "native_relative_stage_gain": 0.8637279863194159,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.017860293284497473,
+        "bf16_chunk32": 0.011132501640909186,
+        "fp32_chunk32": 0.009533717815222137
+      }
+    },
+    {
+      "name": "layers.4.self_attn.h",
+      "native_relative_l2": 0.010619642450675246,
+      "native_max_abs": 0.000244140625,
+      "native_cosine": 0.9999439795269943,
+      "native_relative_stage_gain": 0.9027041440827085,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.015395283402945404,
+        "bf16_chunk32": 0.01078976685375341,
+        "fp32_chunk32": 0.00882718532406321
+      }
+    },
+    {
+      "name": "layers.4.mlp.h",
+      "native_relative_l2": 0.02288814262028384,
+      "native_max_abs": 0.00034332275390625,
+      "native_cosine": 0.9997380532660706,
+      "native_relative_stage_gain": 2.1552648996038943,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.014672035232158827,
+        "bf16_chunk32": 0.010342206865122583,
+        "fp32_chunk32": 0.008432915703070412
+      }
+    },
+    {
+      "name": "layers.5.self_attn.h",
+      "native_relative_l2": 0.021814667333271073,
+      "native_max_abs": 0.0003662109375,
+      "native_cosine": 0.9997622251332661,
+      "native_relative_stage_gain": 0.9530990651001346,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.013964873579572663,
+        "bf16_chunk32": 0.009908168657954446,
+        "fp32_chunk32": 0.008233807255497256
+      }
+    },
+    {
+      "name": "layers.5.mlp.h",
+      "native_relative_l2": 0.02080425889683183,
+      "native_max_abs": 0.0003814697265625,
+      "native_cosine": 0.9997838411848754,
+      "native_relative_stage_gain": 0.9536821524251163,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.013800752451158804,
+        "bf16_chunk32": 0.010252414149275114,
+        "fp32_chunk32": 0.00823669207200143
+      }
+    },
+    {
+      "name": "layers.6.self_attn.h",
+      "native_relative_l2": 0.017997779258024003,
+      "native_max_abs": 0.0003662109375,
+      "native_cosine": 0.999838075870849,
+      "native_relative_stage_gain": 0.8651007155445845,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.012365070306032342,
+        "bf16_chunk32": 0.009913776969598357,
+        "fp32_chunk32": 0.008144714661913932
+      }
+    },
+    {
+      "name": "layers.6.mlp.h",
+      "native_relative_l2": 0.01690996776512809,
+      "native_max_abs": 0.0003662109375,
+      "native_cosine": 0.9998573218867359,
+      "native_relative_stage_gain": 0.9395585712381193,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.012065060083177368,
+        "bf16_chunk32": 0.01015041194801097,
+        "fp32_chunk32": 0.008241526933069676
+      }
+    },
+    {
+      "name": "layers.7.self_attn.h",
+      "native_relative_l2": 0.01503520853374436,
+      "native_max_abs": 0.0003662109375,
+      "native_cosine": 0.999887004226889,
+      "native_relative_stage_gain": 0.8891328914742299,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.011096620543527402,
+        "bf16_chunk32": 0.009803161315585743,
+        "fp32_chunk32": 0.007749080093663254
+      }
+    },
+    {
+      "name": "layers.7.mlp.h",
+      "native_relative_l2": 0.014574147833766593,
+      "native_max_abs": 0.00042724609375,
+      "native_cosine": 0.99989393435191,
+      "native_relative_stage_gain": 0.969334598922058,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.010765284695817142,
+        "bf16_chunk32": 0.009697449470736964,
+        "fp32_chunk32": 0.008210413973809607
+      }
+    },
+    {
+      "name": "layers.8.self_attn.h",
+      "native_relative_l2": 0.012685088564677503,
+      "native_max_abs": 0.000396728515625,
+      "native_cosine": 0.9999195439461636,
+      "native_relative_stage_gain": 0.8703828662481136,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.009786833654153695,
+        "bf16_chunk32": 0.009288180946676897,
+        "fp32_chunk32": 0.00808764107829581
+      }
+    },
+    {
+      "name": "layers.8.mlp.h",
+      "native_relative_l2": 0.011943972084571743,
+      "native_max_abs": 0.00048828125,
+      "native_cosine": 0.9999289694389435,
+      "native_relative_stage_gain": 0.941575774080959,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.009696454497770075,
+        "bf16_chunk32": 0.009175782111850755,
+        "fp32_chunk32": 0.00770303850452595
+      }
+    },
+    {
+      "name": "layers.9.self_attn.h",
+      "native_relative_l2": 0.011393350783329828,
+      "native_max_abs": 0.00048828125,
+      "native_cosine": 0.9999350971472482,
+      "native_relative_stage_gain": 0.953899649350892,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.009416028800516613,
+        "bf16_chunk32": 0.009075254244618535,
+        "fp32_chunk32": 0.007290016881941806
+      }
+    },
+    {
+      "name": "layers.9.mlp.h",
+      "native_relative_l2": 0.011430360719836389,
+      "native_max_abs": 0.00048828125,
+      "native_cosine": 0.9999347341962266,
+      "native_relative_stage_gain": 1.003248380323786,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.009577370032671267,
+        "bf16_chunk32": 0.00927260793082781,
+        "fp32_chunk32": 0.007328978215235625
+      }
+    },
+    {
+      "name": "layers.10.self_attn.h",
+      "native_relative_l2": 0.010777108422047153,
+      "native_max_abs": 0.00048828125,
+      "native_cosine": 0.9999420052911487,
+      "native_relative_stage_gain": 0.9428493716164553,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.00907131972821936,
+        "bf16_chunk32": 0.00903374878314751,
+        "fp32_chunk32": 0.007239032728498091
+      }
+    },
+    {
+      "name": "layers.10.mlp.h",
+      "native_relative_l2": 0.011476919110079592,
+      "native_max_abs": 0.000518798828125,
+      "native_cosine": 0.9999345949148093,
+      "native_relative_stage_gain": 1.0649349213747177,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.009534695120831698,
+        "bf16_chunk32": 0.009625059785083016,
+        "fp32_chunk32": 0.007882519471083656
+      }
+    },
+    {
+      "name": "layers.11.self_attn.h",
+      "native_relative_l2": 0.010661497899087087,
+      "native_max_abs": 0.00048828125,
+      "native_cosine": 0.9999432006575629,
+      "native_relative_stage_gain": 0.9289512104100862,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.009066274197671626,
+        "bf16_chunk32": 0.009197245704250056,
+        "fp32_chunk32": 0.007599797500748135
+      }
+    },
+    {
+      "name": "layers.11.mlp.h",
+      "native_relative_l2": 0.011772236024165734,
+      "native_max_abs": 0.00054931640625,
+      "native_cosine": 0.9999308869570626,
+      "native_relative_stage_gain": 1.1041821829907932,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.010287702755481923,
+        "bf16_chunk32": 0.010323170438128998,
+        "fp32_chunk32": 0.008513969293612417
+      }
+    },
+    {
+      "name": "layers.12.self_attn.h",
+      "native_relative_l2": 0.010397477088620327,
+      "native_max_abs": 0.0006103515625,
+      "native_cosine": 0.9999460011271881,
+      "native_relative_stage_gain": 0.8832202367737668,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.009203035227203745,
+        "bf16_chunk32": 0.009175789829879568,
+        "fp32_chunk32": 0.007510465694802659
+      }
+    },
+    {
+      "name": "layers.12.mlp.h",
+      "native_relative_l2": 0.010698566134309145,
+      "native_max_abs": 0.00054931640625,
+      "native_cosine": 0.9999428578842783,
+      "native_relative_stage_gain": 1.02895789460487,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.009694373556141216,
+        "bf16_chunk32": 0.009696064720987973,
+        "fp32_chunk32": 0.007645852404153892
+      }
+    },
+    {
+      "name": "layers.13.self_attn.h",
+      "native_relative_l2": 0.010316658237010242,
+      "native_max_abs": 0.000732421875,
+      "native_cosine": 0.9999467892316506,
+      "native_relative_stage_gain": 0.9643028895176742,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.009529815206486731,
+        "bf16_chunk32": 0.009472127854152804,
+        "fp32_chunk32": 0.007563447835439986
+      }
+    },
+    {
+      "name": "layers.13.mlp.h",
+      "native_relative_l2": 0.010871882690386839,
+      "native_max_abs": 0.000732421875,
+      "native_cosine": 0.9999409046188633,
+      "native_relative_stage_gain": 1.0538182462403156,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.01001339385041278,
+        "bf16_chunk32": 0.010634479163293582,
+        "fp32_chunk32": 0.00810079903225482
+      }
+    },
+    {
+      "name": "layers.14.self_attn.h",
+      "native_relative_l2": 0.011110739347398691,
+      "native_max_abs": 0.000732421875,
+      "native_cosine": 0.9999383583427993,
+      "native_relative_stage_gain": 1.0219701282486293,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.009894002844640247,
+        "bf16_chunk32": 0.010183587130522259,
+        "fp32_chunk32": 0.007596129297092295
+      }
+    },
+    {
+      "name": "layers.14.mlp.h",
+      "native_relative_l2": 0.012449270025754921,
+      "native_max_abs": 0.0009765625,
+      "native_cosine": 0.9999226371982518,
+      "native_relative_stage_gain": 1.120471791885714,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.010614469498040112,
+        "bf16_chunk32": 0.011053910091912207,
+        "fp32_chunk32": 0.008274838912378124
+      }
+    },
+    {
+      "name": "layers.15.self_attn.h",
+      "native_relative_l2": 0.011652970323269497,
+      "native_max_abs": 0.000946044921875,
+      "native_cosine": 0.9999324410429109,
+      "native_relative_stage_gain": 0.9360364341975034,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.00983473061464356,
+        "bf16_chunk32": 0.010570202628541159,
+        "fp32_chunk32": 0.008043894966151656
+      }
+    },
+    {
+      "name": "layers.15.mlp.h",
+      "native_relative_l2": 0.012979251029525457,
+      "native_max_abs": 0.001953125,
+      "native_cosine": 0.9999165090483406,
+      "native_relative_stage_gain": 1.1138148188370092,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.010802363500432753,
+        "bf16_chunk32": 0.012195600751107464,
+        "fp32_chunk32": 0.009234229643452042
+      }
+    },
+    {
+      "name": "layers.16.self_attn.h",
+      "native_relative_l2": 0.012193401979146373,
+      "native_max_abs": 0.001953125,
+      "native_cosine": 0.9999261232714867,
+      "native_relative_stage_gain": 0.9394534362120418,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.010480070210465129,
+        "bf16_chunk32": 0.01183634344756235,
+        "fp32_chunk32": 0.00924827292343542
+      }
+    },
+    {
+      "name": "layers.16.mlp.h",
+      "native_relative_l2": 0.012435208694933959,
+      "native_max_abs": 0.0009765625,
+      "native_cosine": 0.999922696553399,
+      "native_relative_stage_gain": 1.0198309476060194,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.011041665374710378,
+        "bf16_chunk32": 0.011709102849870954,
+        "fp32_chunk32": 0.00944716816262709
+      }
+    },
+    {
+      "name": "layers.17.self_attn.h",
+      "native_relative_l2": 0.012817979146463496,
+      "native_max_abs": 0.001220703125,
+      "native_cosine": 0.9999183311043076,
+      "native_relative_stage_gain": 1.0307811843709125,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.012503744930257472,
+        "bf16_chunk32": 0.012602987043563432,
+        "fp32_chunk32": 0.011014368415718194
+      }
+    },
+    {
+      "name": "layers.17.mlp.h",
+      "native_relative_l2": 0.01379872829142485,
+      "native_max_abs": 0.001220703125,
+      "native_cosine": 0.999905216989427,
+      "native_relative_stage_gain": 1.0765135544187512,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.013011447223224022,
+        "bf16_chunk32": 0.01341061781362257,
+        "fp32_chunk32": 0.011408417051426829
+      }
+    },
+    {
+      "name": "layers.18.self_attn.h",
+      "native_relative_l2": 0.014159164211544216,
+      "native_max_abs": 0.00146484375,
+      "native_cosine": 0.9999006165389823,
+      "native_relative_stage_gain": 1.0261209520549337,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.013279098296428172,
+        "bf16_chunk32": 0.012841495375514714,
+        "fp32_chunk32": 0.01161158954025592
+      }
+    },
+    {
+      "name": "layers.18.mlp.h",
+      "native_relative_l2": 0.01460520130134197,
+      "native_max_abs": 0.001708984375,
+      "native_cosine": 0.9998951632817582,
+      "native_relative_stage_gain": 1.0315016538500268,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.013953960708317557,
+        "bf16_chunk32": 0.013702478116539442,
+        "fp32_chunk32": 0.011791112556877386
+      }
+    },
+    {
+      "name": "layers.19.self_attn.h",
+      "native_relative_l2": 0.014915532958290416,
+      "native_max_abs": 0.001953125,
+      "native_cosine": 0.9998907910847091,
+      "native_relative_stage_gain": 1.0212480232586683,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.014105140357486506,
+        "bf16_chunk32": 0.01355123813879998,
+        "fp32_chunk32": 0.011995090978785268
+      }
+    },
+    {
+      "name": "layers.19.mlp.h",
+      "native_relative_l2": 0.01509736289130876,
+      "native_max_abs": 0.001708984375,
+      "native_cosine": 0.9998872764282403,
+      "native_relative_stage_gain": 1.0121906427029332,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.014488360092082323,
+        "bf16_chunk32": 0.01404758189502173,
+        "fp32_chunk32": 0.011680118111054303
+      }
+    },
+    {
+      "name": "layers.20.self_attn.h",
+      "native_relative_l2": 0.014871465947170355,
+      "native_max_abs": 0.001953125,
+      "native_cosine": 0.9998911167477961,
+      "native_relative_stage_gain": 0.9850373243483171,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.01421060678488671,
+        "bf16_chunk32": 0.013645998574031462,
+        "fp32_chunk32": 0.012151282025655158
+      }
+    },
+    {
+      "name": "layers.20.mlp.h",
+      "native_relative_l2": 0.060590391522648016,
+      "native_max_abs": 0.01953125,
+      "native_cosine": 0.998164198062844,
+      "native_relative_stage_gain": 4.074271611009321,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.060975175604105106,
+        "bf16_chunk32": 0.05979714697476334,
+        "fp32_chunk32": 0.060026191526768316
+      }
+    },
+    {
+      "name": "layers.21.self_attn.h",
+      "native_relative_l2": 0.05567483769636665,
+      "native_max_abs": 0.015625,
+      "native_cosine": 0.9984490413581667,
+      "native_relative_stage_gain": 0.9188723871433644,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.056103668526842426,
+        "bf16_chunk32": 0.05494375222889313,
+        "fp32_chunk32": 0.05574649623138717
+      }
+    },
+    {
+      "name": "layers.21.mlp.h",
+      "native_relative_l2": 0.054130278009607104,
+      "native_max_abs": 0.0092315673828125,
+      "native_cosine": 0.9985362087803408,
+      "native_relative_stage_gain": 0.9722574909839325,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.0544912120266051,
+        "bf16_chunk32": 0.05325025304976943,
+        "fp32_chunk32": 0.05359310333609374
+      }
+    },
+    {
+      "name": "layers.22.self_attn.h",
+      "native_relative_l2": 0.04788753774282111,
+      "native_max_abs": 0.00909423828125,
+      "native_cosine": 0.9988561205538679,
+      "native_relative_stage_gain": 0.8846719341497189,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.04885585835566708,
+        "bf16_chunk32": 0.047827224297442496,
+        "fp32_chunk32": 0.0484740391967651
+      }
+    },
+    {
+      "name": "layers.22.mlp.h",
+      "native_relative_l2": 0.046457130003240095,
+      "native_max_abs": 0.00830078125,
+      "native_cosine": 0.998930164223316,
+      "native_relative_stage_gain": 0.9701298540914134,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.04673122647550899,
+        "bf16_chunk32": 0.04601922765330185,
+        "fp32_chunk32": 0.046595320927184526
+      }
+    },
+    {
+      "name": "layers.23.self_attn.h",
+      "native_relative_l2": 0.04052005089394416,
+      "native_max_abs": 0.0079345703125,
+      "native_cosine": 0.9991860819288318,
+      "native_relative_stage_gain": 0.8722030588441029,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.041426133565482685,
+        "bf16_chunk32": 0.04099229667127566,
+        "fp32_chunk32": 0.04150854600928652
+      }
+    },
+    {
+      "name": "layers.23.mlp.h",
+      "native_relative_l2": 0.0403624757069798,
+      "native_max_abs": 0.009765625,
+      "native_cosine": 0.9991985811591977,
+      "native_relative_stage_gain": 0.9961111799346751,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.04104534332833511,
+        "bf16_chunk32": 0.04078098054567377,
+        "fp32_chunk32": 0.041477838795568475
+      }
+    },
+    {
+      "name": "layers.24.self_attn.h",
+      "native_relative_l2": 0.03473526426171284,
+      "native_max_abs": 0.0087890625,
+      "native_cosine": 0.9994039972544463,
+      "native_relative_stage_gain": 0.8605830948993582,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.035585982578449665,
+        "bf16_chunk32": 0.035704203040560364,
+        "fp32_chunk32": 0.0355525456387164
+      }
+    },
+    {
+      "name": "layers.24.mlp.h",
+      "native_relative_l2": 0.03230728031361319,
+      "native_max_abs": 0.009521484375,
+      "native_cosine": 0.9994857602013637,
+      "native_relative_stage_gain": 0.9301003173660634,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.03342301095376178,
+        "bf16_chunk32": 0.03310176325619218,
+        "fp32_chunk32": 0.03348655932080729
+      }
+    },
+    {
+      "name": "layers.25.self_attn.h",
+      "native_relative_l2": 0.031153195943246413,
+      "native_max_abs": 0.01171875,
+      "native_cosine": 0.999519447505901,
+      "native_relative_stage_gain": 0.9642778853817513,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.03211960952689056,
+        "bf16_chunk32": 0.03234048192438157,
+        "fp32_chunk32": 0.03221304332533538
+      }
+    },
+    {
+      "name": "layers.25.mlp.h",
+      "native_relative_l2": 0.03034512380752706,
+      "native_max_abs": 0.009765625,
+      "native_cosine": 0.9995410350810265,
+      "native_relative_stage_gain": 0.974061340698673,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.031527910443308854,
+        "bf16_chunk32": 0.03187062438858542,
+        "fp32_chunk32": 0.03138294224565363
+      }
+    },
+    {
+      "name": "layers.26.self_attn.h",
+      "native_relative_l2": 0.027572151312697583,
+      "native_max_abs": 0.009765625,
+      "native_cosine": 0.9996206056409368,
+      "native_relative_stage_gain": 0.9086188439230672,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.029032912194046134,
+        "bf16_chunk32": 0.029676023158663387,
+        "fp32_chunk32": 0.02873257417337602
+      }
+    },
+    {
+      "name": "layers.26.mlp.h",
+      "native_relative_l2": 0.027315072527611756,
+      "native_max_abs": 0.0107421875,
+      "native_cosine": 0.9996285890345254,
+      "native_relative_stage_gain": 0.9906761433966367,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.028600589284560524,
+        "bf16_chunk32": 0.02909944535868779,
+        "fp32_chunk32": 0.028204301533233365
+      }
+    },
+    {
+      "name": "layers.27.self_attn.h",
+      "native_relative_l2": 0.025106996728306588,
+      "native_max_abs": 0.01171875,
+      "native_cosine": 0.9996862535568152,
+      "native_relative_stage_gain": 0.9191627334295704,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.026560507861696052,
+        "bf16_chunk32": 0.027070882899987242,
+        "fp32_chunk32": 0.02602668949053872
+      }
+    },
+    {
+      "name": "layers.27.mlp.h",
+      "native_relative_l2": 0.025256200688314287,
+      "native_max_abs": 0.01171875,
+      "native_cosine": 0.9996825813887688,
+      "native_relative_stage_gain": 1.005942724317938,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.02616795217124435,
+        "bf16_chunk32": 0.02679066418240914,
+        "fp32_chunk32": 0.025379305516752177
+      }
+    },
+    {
+      "name": "layers.28.self_attn.h",
+      "native_relative_l2": 0.023407969611309032,
+      "native_max_abs": 0.013671875,
+      "native_cosine": 0.9997267321858735,
+      "native_relative_stage_gain": 0.9268207003969363,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.024252333352274478,
+        "bf16_chunk32": 0.02482902960929922,
+        "fp32_chunk32": 0.023488944002037444
+      }
+    },
+    {
+      "name": "layers.28.mlp.h",
+      "native_relative_l2": 0.021891907508543394,
+      "native_max_abs": 0.013671875,
+      "native_cosine": 0.9997614117478182,
+      "native_relative_stage_gain": 0.9352330796758559,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.02271550161201933,
+        "bf16_chunk32": 0.023443390297965265,
+        "fp32_chunk32": 0.02192968971228414
+      }
+    },
+    {
+      "name": "layers.29.self_attn.h",
+      "native_relative_l2": 0.021790783528834592,
+      "native_max_abs": 0.013671875,
+      "native_cosine": 0.9997634735860593,
+      "native_relative_stage_gain": 0.9953807597775873,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.022665202128871784,
+        "bf16_chunk32": 0.023445798423363823,
+        "fp32_chunk32": 0.022155865179455666
+      }
+    },
+    {
+      "name": "layers.29.mlp.h",
+      "native_relative_l2": 0.02138376988168976,
+      "native_max_abs": 0.013671875,
+      "native_cosine": 0.9997720351244751,
+      "native_relative_stage_gain": 0.9813217525378906,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.02221357394447172,
+        "bf16_chunk32": 0.022978628723026744,
+        "fp32_chunk32": 0.021772015881075756
+      }
+    },
+    {
+      "name": "layers.30.self_attn.h",
+      "native_relative_l2": 0.019666294872434445,
+      "native_max_abs": 0.013671875,
+      "native_cosine": 0.9998067829867419,
+      "native_relative_stage_gain": 0.9196832448741448,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.02031778496380623,
+        "bf16_chunk32": 0.020918287864695576,
+        "fp32_chunk32": 0.019656089217345653
+      }
+    },
+    {
+      "name": "layers.30.mlp.h",
+      "native_relative_l2": 0.03443784069929416,
+      "native_max_abs": 0.025390625,
+      "native_cosine": 0.9994077232282975,
+      "native_relative_stage_gain": 1.7511097500914865,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.020215807516673765,
+        "bf16_chunk32": 0.034605082653230305,
+        "fp32_chunk32": 0.03436466365939054
+      }
+    },
+    {
+      "name": "layers.31.self_attn.h",
+      "native_relative_l2": 0.03243836469689361,
+      "native_max_abs": 0.0263671875,
+      "native_cosine": 0.99947416343498,
+      "native_relative_stage_gain": 0.9419395652631167,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.019695419431641648,
+        "bf16_chunk32": 0.032708881613488686,
+        "fp32_chunk32": 0.03231351047696199
+      }
+    },
+    {
+      "name": "layers.31.mlp.h",
+      "native_relative_l2": 0.03450330013035637,
+      "native_max_abs": 0.02734375,
+      "native_cosine": 0.9994055541729987,
+      "native_relative_stage_gain": 1.0636571988988244,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.01960234208017567,
+        "bf16_chunk32": 0.034231565936713206,
+        "fp32_chunk32": 0.03402268630511569
+      }
+    },
+    {
+      "name": "layers.32.self_attn.h",
+      "native_relative_l2": 0.032371285341253365,
+      "native_max_abs": 0.02734375,
+      "native_cosine": 0.999476672101676,
+      "native_relative_stage_gain": 0.9382083806172721,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.018869475869064987,
+        "bf16_chunk32": 0.03198171040534203,
+        "fp32_chunk32": 0.031879407656228445
+      }
+    },
+    {
+      "name": "layers.32.mlp.h",
+      "native_relative_l2": 0.031307668784448295,
+      "native_max_abs": 0.03125,
+      "native_cosine": 0.9995106422986132,
+      "native_relative_stage_gain": 0.9671432090016636,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.01860901295727489,
+        "bf16_chunk32": 0.030883177650149456,
+        "fp32_chunk32": 0.03076889740190902
+      }
+    },
+    {
+      "name": "layers.33.self_attn.h",
+      "native_relative_l2": 0.031028613047789432,
+      "native_max_abs": 0.03125,
+      "native_cosine": 0.9995188550838682,
+      "native_relative_stage_gain": 0.9910866651049572,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.018517964382589465,
+        "bf16_chunk32": 0.03058718261628162,
+        "fp32_chunk32": 0.03053575508306142
+      }
+    },
+    {
+      "name": "layers.33.mlp.h",
+      "native_relative_l2": 0.030738239351455067,
+      "native_max_abs": 0.03125,
+      "native_cosine": 0.9995279872145035,
+      "native_relative_stage_gain": 0.990641744254339,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.018575982092093254,
+        "bf16_chunk32": 0.030338437700196768,
+        "fp32_chunk32": 0.030181057518605166
+      }
+    },
+    {
+      "name": "layers.34.self_attn.h",
+      "native_relative_l2": 0.0299437264313675,
+      "native_max_abs": 0.03125,
+      "native_cosine": 0.9995517784816176,
+      "native_relative_stage_gain": 0.9741522957446177,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.018497052470946337,
+        "bf16_chunk32": 0.029436200329083676,
+        "fp32_chunk32": 0.029314270584396313
+      }
+    },
+    {
+      "name": "layers.34.mlp.h",
+      "native_relative_l2": 0.030259836201199656,
+      "native_max_abs": 0.029296875,
+      "native_cosine": 0.9995421619078892,
+      "native_relative_stage_gain": 1.010556794611275,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.018943906818773535,
+        "bf16_chunk32": 0.029688864570295327,
+        "fp32_chunk32": 0.029763040736066143
+      }
+    },
+    {
+      "name": "layers.35.self_attn.h",
+      "native_relative_l2": 0.02926728101482066,
+      "native_max_abs": 0.02734375,
+      "native_cosine": 0.9995716554893068,
+      "native_relative_stage_gain": 0.967198924019964,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.01877557281398803,
+        "bf16_chunk32": 0.02885892952407822,
+        "fp32_chunk32": 0.029022430498572224
+      }
+    },
+    {
+      "name": "layers.35.mlp.h",
+      "native_relative_l2": 0.029217202815558153,
+      "native_max_abs": 0.02734375,
+      "native_cosine": 0.9995731488617907,
+      "native_relative_stage_gain": 0.9982889357150345,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.01892050291947307,
+        "bf16_chunk32": 0.028898623367170743,
+        "fp32_chunk32": 0.029089457444953188
+      }
+    },
+    {
+      "name": "layers.36.self_attn.h",
+      "native_relative_l2": 0.02745246258613335,
+      "native_max_abs": 0.029296875,
+      "native_cosine": 0.999623159285533,
+      "native_relative_stage_gain": 0.9395992751063398,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.01828238202639453,
+        "bf16_chunk32": 0.027341796880435452,
+        "fp32_chunk32": 0.027407813025610957
+      }
+    },
+    {
+      "name": "layers.36.mlp.h",
+      "native_relative_l2": 0.02707352322124145,
+      "native_max_abs": 0.029296875,
+      "native_cosine": 0.9996336953958095,
+      "native_relative_stage_gain": 0.9861965255866223,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.018386154340829713,
+        "bf16_chunk32": 0.026848224950587755,
+        "fp32_chunk32": 0.027070312071089016
+      }
+    },
+    {
+      "name": "layers.37.self_attn.h",
+      "native_relative_l2": 0.02673049168498896,
+      "native_max_abs": 0.029296875,
+      "native_cosine": 0.999642805364063,
+      "native_relative_stage_gain": 0.9873296307447952,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.018327646018381518,
+        "bf16_chunk32": 0.026586314314997177,
+        "fp32_chunk32": 0.02684158279165832
+      }
+    },
+    {
+      "name": "layers.37.mlp.h",
+      "native_relative_l2": 0.026891802362795307,
+      "native_max_abs": 0.03125,
+      "native_cosine": 0.9996383515859171,
+      "native_relative_stage_gain": 1.006034706720226,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.018821398632112834,
+        "bf16_chunk32": 0.026817021641004406,
+        "fp32_chunk32": 0.02705479514629933
+      }
+    },
+    {
+      "name": "layers.38.self_attn.h",
+      "native_relative_l2": 0.02688822725576494,
+      "native_max_abs": 0.033203125,
+      "native_cosine": 0.9996384499496286,
+      "native_relative_stage_gain": 0.9998670558788832,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.019152389353762407,
+        "bf16_chunk32": 0.0267637274069614,
+        "fp32_chunk32": 0.027036100668487707
+      }
+    },
+    {
+      "name": "layers.38.mlp.h",
+      "native_relative_l2": 0.029556178556224513,
+      "native_max_abs": 0.041015625,
+      "native_cosine": 0.9995631210826001,
+      "native_relative_stage_gain": 1.0992237708749488,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.02322948961952312,
+        "bf16_chunk32": 0.029678799555735786,
+        "fp32_chunk32": 0.029768541522918586
+      }
+    },
+    {
+      "name": "layers.39.self_attn.h",
+      "native_relative_l2": 0.02910610641062009,
+      "native_max_abs": 0.04052734375,
+      "native_cosine": 0.9995763368212489,
+      "native_relative_stage_gain": 0.9847723160574275,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.023161134329774978,
+        "bf16_chunk32": 0.02916606551863101,
+        "fp32_chunk32": 0.02927779287503722
+      }
+    },
+    {
+      "name": "layers.39.mlp.h",
+      "native_relative_l2": 0.029258756901381987,
+      "native_max_abs": 0.041015625,
+      "native_cosine": 0.9995719024155106,
+      "native_relative_stage_gain": 1.0052446207887908,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.02375781346021576,
+        "bf16_chunk32": 0.029572705355875552,
+        "fp32_chunk32": 0.029423799129240702
+      }
+    },
+    {
+      "name": "layers.40.self_attn.h",
+      "native_relative_l2": 0.027410042519709583,
+      "native_max_abs": 0.04296875,
+      "native_cosine": 0.9996242742874515,
+      "native_relative_stage_gain": 0.936815005917593,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.022974671999452603,
+        "bf16_chunk32": 0.027893959522779163,
+        "fp32_chunk32": 0.02779476165173337
+      }
+    },
+    {
+      "name": "layers.40.mlp.h",
+      "native_relative_l2": 0.026989452919032222,
+      "native_max_abs": 0.05078125,
+      "native_cosine": 0.9996358056480531,
+      "native_relative_stage_gain": 0.9846556385173453,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.022440850221886,
+        "bf16_chunk32": 0.027235823692639452,
+        "fp32_chunk32": 0.027577384840706827
+      }
+    },
+    {
+      "name": "layers.41.self_attn.h",
+      "native_relative_l2": 0.027019998605132427,
+      "native_max_abs": 0.0516357421875,
+      "native_cosine": 0.9996349998747176,
+      "native_relative_stage_gain": 1.0011317638112873,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.022454884757595443,
+        "bf16_chunk32": 0.027289232977516238,
+        "fp32_chunk32": 0.027712258643387847
+      }
+    },
+    {
+      "name": "layers.41.mlp.h",
+      "native_relative_l2": 0.03176660334057392,
+      "native_max_abs": 0.0517578125,
+      "native_cosine": 0.9994955506460061,
+      "native_relative_stage_gain": 1.1756700584928927,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.022618741205875353,
+        "bf16_chunk32": 0.032583928444648545,
+        "fp32_chunk32": 0.02785271905242563
+      }
+    },
+    {
+      "name": "layers.42.self_attn.h",
+      "native_relative_l2": 0.03149163389973553,
+      "native_max_abs": 0.04931640625,
+      "native_cosine": 0.9995049529898596,
+      "native_relative_stage_gain": 0.9913440717003826,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.022589686093008703,
+        "bf16_chunk32": 0.03245316237712188,
+        "fp32_chunk32": 0.02762300946487269
+      }
+    },
+    {
+      "name": "layers.42.mlp.h",
+      "native_relative_l2": 0.030563051014103657,
+      "native_max_abs": 0.0625,
+      "native_cosine": 0.9995339507987827,
+      "native_relative_stage_gain": 0.9705133468594124,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.022232699813435126,
+        "bf16_chunk32": 0.03136642624556481,
+        "fp32_chunk32": 0.026859545099426885
+      }
+    },
+    {
+      "name": "layers.43.self_attn.h",
+      "native_relative_l2": 0.03029858474717588,
+      "native_max_abs": 0.0625,
+      "native_cosine": 0.9995424284797455,
+      "native_relative_stage_gain": 0.9913468630207849,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.022317207495665695,
+        "bf16_chunk32": 0.031122772627414343,
+        "fp32_chunk32": 0.026982830363078896
+      }
+    },
+    {
+      "name": "layers.43.mlp.h",
+      "native_relative_l2": 0.02964667319012181,
+      "native_max_abs": 0.056640625,
+      "native_cosine": 0.9995612927306696,
+      "native_relative_stage_gain": 0.9784837621131847,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.022499698702179233,
+        "bf16_chunk32": 0.03046683899316361,
+        "fp32_chunk32": 0.02701974703050432
+      }
+    },
+    {
+      "name": "layers.44.self_attn.h",
+      "native_relative_l2": 0.028291356890332166,
+      "native_max_abs": 0.060546875,
+      "native_cosine": 0.9996003122669457,
+      "native_relative_stage_gain": 0.9542843714335802,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.022009986251919703,
+        "bf16_chunk32": 0.029022101339577038,
+        "fp32_chunk32": 0.025963348180461705
+      }
+    },
+    {
+      "name": "layers.44.mlp.h",
+      "native_relative_l2": 0.028914261621775815,
+      "native_max_abs": 0.078125,
+      "native_cosine": 0.9995826536120874,
+      "native_relative_stage_gain": 1.022017492263035,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.023353878732474007,
+        "bf16_chunk32": 0.02790574973071872,
+        "fp32_chunk32": 0.02682121246977629
+      }
+    },
+    {
+      "name": "layers.45.self_attn.h",
+      "native_relative_l2": 0.02892450110399899,
+      "native_max_abs": 0.07421875,
+      "native_cosine": 0.9995827328313438,
+      "native_relative_stage_gain": 1.0003541325854042,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.023398260864389172,
+        "bf16_chunk32": 0.027986985025123923,
+        "fp32_chunk32": 0.02706353553680577
+      }
+    },
+    {
+      "name": "layers.45.mlp.h",
+      "native_relative_l2": 0.030881376096850963,
+      "native_max_abs": 0.0859375,
+      "native_cosine": 0.9995230620265371,
+      "native_relative_stage_gain": 1.0676545806552018,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.026172802857686406,
+        "bf16_chunk32": 0.030038777441860568,
+        "fp32_chunk32": 0.02884558443461574
+      }
+    },
+    {
+      "name": "layers.46.self_attn.h",
+      "native_relative_l2": 0.030474272230133236,
+      "native_max_abs": 0.08203125,
+      "native_cosine": 0.9995355930720247,
+      "native_relative_stage_gain": 0.9868171720897101,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.02608049970876332,
+        "bf16_chunk32": 0.029727342366621525,
+        "fp32_chunk32": 0.0286328455858942
+      }
+    },
+    {
+      "name": "layers.46.mlp.h",
+      "native_relative_l2": 0.06371772504248566,
+      "native_max_abs": 72.0,
+      "native_cosine": 0.9999770963010213,
+      "native_relative_stage_gain": 2.090869457400233,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.021883682159805257,
+        "bf16_chunk32": 0.00919967392908101,
+        "fp32_chunk32": 0.06448980894506615
+      }
+    },
+    {
+      "name": "layers.47.self_attn.h",
+      "native_relative_l2": 0.0637121312051395,
+      "native_max_abs": 72.0,
+      "native_cosine": 0.999976900442809,
+      "native_relative_stage_gain": 0.9999122090855812,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.02188213082811536,
+        "bf16_chunk32": 0.009201902663836227,
+        "fp32_chunk32": 0.06458744198324479
+      }
+    },
+    {
+      "name": "layers.47.mlp.h",
+      "native_relative_l2": 0.06340120721791398,
+      "native_max_abs": 72.0,
+      "native_cosine": 0.9999756906657191,
+      "native_relative_stage_gain": 0.9951198620836524,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.02178111042043273,
+        "bf16_chunk32": 0.009175143781828632,
+        "fp32_chunk32": 0.0639841724365
+      }
+    },
+    {
+      "name": "layers.48.self_attn.h",
+      "native_relative_l2": 0.06343000981145129,
+      "native_max_abs": 72.0,
+      "native_cosine": 0.9999744120016858,
+      "native_relative_stage_gain": 1.000454290932321,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.02179771493752829,
+        "bf16_chunk32": 0.00918623348374564,
+        "fp32_chunk32": 0.06259827504524064
+      }
+    },
+    {
+      "name": "layers.48.mlp.h",
+      "native_relative_l2": 0.057590835322150216,
+      "native_max_abs": 72.0,
+      "native_cosine": 0.9999653444084334,
+      "native_relative_stage_gain": 0.9079430303312533,
+      "reference_relative_l2": {
+        "bf16_chunk1": 0.018808472858325067,
+        "bf16_chunk32": 0.007616390196774813,
+        "fp32_chunk32": 0.056732648231588634
+      }
+    }
+  ]
+}
