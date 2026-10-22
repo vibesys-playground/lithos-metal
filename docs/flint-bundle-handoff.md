@@ -1,158 +1,204 @@
 # Flint M3 Pro bundle operator handoff
 
-Operator evidence outside `.vibesys/tasks/flint-m3pro/`. No VibeSys optimization
-agents have been launched. Updated 2026-10-21; the final port gate is still pending.
+Updated 2026-10-21 (America/Los_Angeles). No optimization agents have been
+launched. Accuracy qualification is still pending in the port workstream.
 
-## Integration
+## Current integration
 
-The bundle's fork branch is `vibesys`. The original bundle `37d1a9923e5f` now
-includes the port through `d229770` from `flint-model`. The port remains
-numerically unqualified; its current investigation and eventual gate belong to
-`docs/flint-port-handoff.md`. No accuracy threshold has been changed here.
+The fork branch is `vibesys`. The inherited uncommitted RF migration was
+completed and first pushed as `2df13f8`. It retained the launcher, shared-pack
+policy, accuracy checker, protocol-v2 writer and useful metric logic. The
+bespoke `benchmark/core.py`, its streaming parser and workload-only tests were
+removed. Stale bespoke operator commands were removed from the task README.
+No inherited work was discarded without replacement or explanation.
 
-Implementation commits include:
+The branch includes `flint-model` through `6ed17d9`. Its changes remain owned
+by the port workstream. This continuation changes no `monolith/` implementation
+and requires no additional serving API extension. Existing raw-token
+Completions and truthful prefix-cache telemetry support RF directly.
 
-- `c8aa948`: read-only pack reuse, bounded shared-cache policy and raw-ID API.
-- `f7d0dd3`: computed position-table extension without repacking weights.
-- `8b65602`, `9aa08f0`: reduced operator measurement, per-turn logging and
-  failure diagnostics without publishing an invalid score.
-- `d8616e6`: provenance rejection tests and current operator setup.
+VibeSys's `exp/flint-bundle-2` pins the fork and is merged normally into
+`exp/flint-lithos-metal`. The first RF experiment merge is `9689a3761`.
+Only the example submodule pointer changes in VibeSys. Fetch before each merge;
+never force push or push main. No PR was opened.
 
-VibeSys uses a fresh worktree on `exp/flint-bundle-2`. A normal merge into
-`exp/flint-lithos-metal` was pushed at `c071783bb62dd70cdfbd4177c2287d84fed45b68`.
-A later pin update reached `5f9c4d2d1e` on the experiment branch, pointing to
-`511f7e9`; the final measurement pin will advance.
-No VibeSys `src/` or `libs/` file was changed. No main push, force push or PR.
+## Two tasks and switching
 
-## Disk policy
+The input schema has one `benchmark: BenchmarkCommand` and rejects unknown
+fields; it offers no list of benchmarks or staged benchmark selection.
+There are therefore two tasks:
 
-`FLINT_PACK_DIR` resolves the existing shared pack. Its documented default is
-`$HOME/.cache/lithos-metal/flint-int4/3b93f9053b530488405ae9fca51d4900d6ce21f0/block-r16-interleaved16-c9216`.
-The only authorized pack key is
+- `flint-m3pro-quick`: one RF-generated synthetic session with three rounds.
+  Each adds 256 prompt tokens and requests 16 output tokens. Full prompt
+  lengths are 256, 528 and 800 tokens. It is a cheap bootstrap gradient,
+  not evidence of representative coding traffic.
+- `flint-m3pro`: first seven rounds of session 0 from RF's bundled TraceLab
+  execution-v2 example. Full prompts are 14438, 16159, 16687, 18049, 27031,
+  31294 and 32050 tokens; outputs are 157, 91, 79, 220, 242, 100 and 161.
+  The bounded window retains source lengths. Subsequent rounds exceed the
+  launcher's 32768 context and are explicitly excluded.
+
+Both manifests call the same full-task RF adapter and accuracy checker. There
+is no copied launcher, weight policy, checker or replay implementation. Agent
+instructions live only in each task's `OBJECTIVE.md`.
+
+Begin dynamic optimization on `flint-m3pro-quick` only after accuracy passes.
+Stop at a round boundary, select the desired candidate commit, and start a
+new run with `--task flint-m3pro`. The two tasks have different score
+populations. Do not resume a quick run as a full run or compare their means
+as if they were the same experiment.
+
+## RF identity and replay policy
+
+The existing evaluator package is `vibesys-evaluator-request-factory` version
+`0.1.0`, entrypoint `request-factory-adapter`, result protocol 2. It injects
+its trusted `session_runner` into the task adapter. RF owns request replay,
+HTTP streaming, prefix construction, request logs and summaries. No replacement
+runner was written and no RF source change is needed.
+
+RF is pinned to `89dce4a64ae12e7084fbe464ddda882fa0a4c482`, matching VibeSys's
+bundled evaluator. `benchmark/trace-identity.json` records the source URL,
+source SHA-256, RF source manifest, synthetic generator settings, selection
+policy and SHA-256 of both replay CSVs and the corpus. RF's bundled source
+manifest reports 18579 folded prefix tokens across its complete source;
+that is source canonicalization metadata, not a measured cache hit here.
+
+Quick was generated through `launcher tracegen`, `generator.type: synthetic`,
+one session, three rounds, fixed input 256, output 16, no compaction, constant
+arrival rate 1 and seed 0. The pinned generator requires a positive tool-wait
+distribution, so generation used 1 ms followed by the same explicit zero-wait
+transformation as full. Full uses the already canonical RF bundled artifact;
+no raw-session schema is reimplemented in this task.
+
+Both replay `text-generation-session-execution-v2` with saturated arrivals,
+`max_concurrency=1`, source order and prefix reuse. Every
+`tool_wait_after_ms` is zero. This skips time spent waiting for tools and sends
+the next round immediately after the preceding completion. Workload shapes
+are replayed with synthetic token IDs, not original private prompt content.
+
+The Flint revision remains `3b93f9053b530488405ae9fca51d4900d6ce21f0`.
+`reference/checkpoint.json` pins the tokenizer and chat template along with
+checkpoint files. Performance uses raw-token Completions, bypassing chat
+framing; the independent accuracy checker still verifies chat framing.
+
+The corpus has enough distinct source text for the full 65536-token pool.
+Quick caps its pool at 1024 tokens, covering its largest 800-token prompt.
+RF's mandatory cache probe is bounded by that pool, so quick does not pay an
+8192-token probe. Full retains RF's normal 8192-token probe. Neither probe is
+scored, but both are included in startup and whole wall time.
+
+## Metrics and fixed budget
+
+Scored replay has a fixed 600-second budget after RF preparation. The adapter
+uses request-log creation for its watchdog and reconciles the final cutoff
+against RF's first `submit_timestamp`, removing asynchronous writer scheduling
+skew. Startup, scored duration and total wall duration are separate. Total
+wall time includes model validation, native build, model load, cache probe,
+replay and owned-server cleanup; lock queue time is excluded.
+
+Objectives are:
+
+- Minimize `ttft_ms_avg`: RF `first_token_id_ms`, averaged over planned rounds.
+- Minimize `tpot_ms_avg`: RF `token_delivery_tpot_ms`, averaged over planned
+  rounds. This divides first-to-last generated-token-event time by tokens
+  delivered after the first event, excluding terminal usage and `[DONE]`.
+- Maximize `completed_requests`: planned rounds completed by the cutoff.
+
+For complete runs, objective means come from RF's summary after comparison
+with its request log. No text-only TTFT fallback is accepted. A zero or
+non-finite TPOT, short output, earlier HTTP error or inconsistent RF summary
+invalidates evaluation.
+
+Every unfinished planned request, including not-yet-submitted rounds, gets
+`status=timed_out`, TTFT 600000 ms, TPOT 600000 ms and decode speed zero.
+Late completions during cleanup receive the same censoring. The denominator
+never shrinks. Completing more work improves the score. Quick must complete
+all three requests; a quick timeout is an invalid bootstrap measurement.
+
+Diagnostic `decode_tokens_per_second` is the planned-round mean of
+`1000 / token_delivery_tpot_ms`, with zero for censored rounds. The protocol
+also reports completion/timeout counts, startup and scored duration. The JSON
+sidecar preserves every planned outcome, RF's raw records, full summary and
+input identity, including planned and measured prefix-cache statistics.
+Accuracy remains an independent hard gate.
+
+## Pack, engine and process policy
+
+Use only the existing shared pack, read-only, resolved by `FLINT_PACK_DIR`
+or its documented `$HOME/.cache/lithos-metal/flint-int4/REVISION/LAYOUT`
+default. The pack key is
 `65dcd02bfffafe7ef9c806b04a40f155ea4690d0111d77e03efff89a53c7ffe9`.
-The launcher checks the key, manifest SHA-256 and complete weight-file size,
-rejects paths in the candidate worktree (including symlink aliases), and
-requires at least 22,736,175,104 bytes plus 2 GiB free before build/model load.
-It always supplies `--pack PATH --pack-read-only`; missing or incompatible
-packs fail without creating directories or packed weights. Target and draft
-paths honor the same read-only option.
-
-For a future explicitly authorized storage-layout migration,
-`monolith.serving.pack_policy.SharedPackCache` admits a full pack plus margin,
-keys entries by full SHA-256 layout identity, keeps at most one extra pack,
-evicts least-recently-used extras before building, publishes atomically and
-cleans interrupted/failed builds. Its pinned pack is outside the eviction set.
-Callers hold the model execution lock for build/use. No extra pack has been
-created in this continuation, and current authorization still permits only the
-existing pack. Policy and tests use small synthetic files, never real weights.
-
-The existing pack's F32 rotary tables end at position 9215. The generic pack
-API now permits model-generated F32 leading-axis extensions in memory, only
-when every old value matches bit for bit and trailing dimensions agree. The
-compiler binds new initialized table buffers while preserving read-only weight
-windows. The real 32768-capacity server passed this check. No pack, manifest,
-checkpoint or quantization was rewritten.
-
-## Serving API
-
-Non-streaming Chat Completions accepts optional `return_token_ids: true` and
-returns top-level `completion_token_ids`, the actual committed runtime IDs,
-including special/EOS tokens. Length equals completion usage. Stop-string
-truncation applies consistently. Streaming with the option is rejected. It is
-a model-independent diagnostic documented in `docs/design/serving.md`.
-The immutable checker's HTTP client requests it explicitly. A callback carries
-IDs from the real backend to serialization; no retokenization or shared mutable
-last-response state is used.
-
-## Verification
-
-- The initial 158 affected fork contract tests passed. A later expanded run
-  had 164 passes and exposed a pre-existing Ollama queue-duration flake, which
-  assumed a thread started within a real sleep interval. That test now injects
-  a clock and checks nine queue/execution combinations with no sleeps; eleven
-  targeted duration/stream tests pass. The production default clock is unchanged.
-- 30 hermetic bundle tests passed. Policy cases cover default/env selection,
-  low disk, missing/incomplete packs, worktree aliases, altered identity,
-  read-only reuse, one-extra eviction, builder failure and interrupted builds.
-- Capacity regression fails at `c8aa948` with insufficient context and passes
-  at head; it compiles static/dynamic programs from a tiny 8-position pack for
-  32 and 32768 positions, checks actual rotary bindings target generated
-  buffers and verifies packed bytes remain unchanged.
-- Existing checker tests reject an injected wrong token even when the normal
-  pins pass. No numerical threshold has been loosened.
-- Touched fork Python passes Ruff E9/F; new/task modules pass import checks.
-  Native CMake build and `tools/ci/hygiene.py` pass. Broader legacy packer lint
-  has pre-existing unused imports, which were not suppressed or changed.
-- VibeSys `check_format.sh`, `check_lint.sh`, task validation and six selected
-  registered-example checks pass. `repoctl test --dry-run` cannot select checks
-  because upstream `HANDOFF-dynamic-host.md` and `HANDOFF-preflight-docker.md`
-  are unowned paths in the experiment's accumulated diff. They were not edited.
-- Current VibeSys preflight reports valid settings, `uses_docker: false`,
-  backend `metal` and all six dynamic roles. This comes from the other agent's
-  merged preflight change. That agent's `HANDOFF-preflight-docker.md` recommends
-  two coding workstreams and one evaluation slot; this task changes no policy.
-
-## Real accuracy and performance
+The launcher checks manifest identity and complete weight-file size, rejects
+candidate-worktree aliases and requires 22736175104 bytes plus 2 GiB free.
+It always passes `--pack PATH --pack-read-only`. No pack or weight copy was
+created. Capacity-only rotary tables may extend in memory after exact
+packed-prefix verification. KV remains BF16 and weights remain unchanged.
 
 Every model/Metal command holds `lockf -k /tmp/flint-gpu.lock` for that command.
-The first accuracy attempt failed before model startup because CMake was not
-on PATH. Activating the source-build environment resolved that prerequisite.
+The accuracy manifest acquires it. The RF adapter re-executes itself under
+`lockf`; do not double-lock it with another wrapper. Its hidden lock-held flag
+is only for that internal re-exec. Each evaluator owns a fresh server process
+group, terminates it on every exit path and releases the lock on completion.
+Unrelated reference processes are never stopped by this task.
 
-The current unchanged accuracy checker then started the actual candidate server
-at 32768 context through the trusted launcher and completed all four semantic
-probes. The first 32-token pin (`port-1`, ocean sentence) passed. The next pin
-(`port-2`, Python sum continuation) failed at zero-based token 22: expected
-3087, received 220. Raw IDs were present and truthful; this is a numerical
-failure, not a missing-extension fallback. The evaluator exited 1 and cleaned
-its server process group. The current port-defined gate specification is still
-pending, so this candidate is not qualified for optimization.
+A source-build Python environment needs CMake, nanobind and the serving
+extras. The native extension is built in the evaluated candidate checkout.
+An initial attempt using the VibeSys environment failed before model startup:
+`transformers 5.20.2` expected a Hub API absent from the VibeSys-locked
+`huggingface_hub 1.10.2`. The VibeSys environment now has compatible
+`transformers 5.5.4`, verified after `uv run` synchronizes dependencies.
+The dedicated lithos source environment remains usable independently.
 
-The initial reduced run used one repetition of the original six turns. It
-completed only the 1024-token turn: TTFT **134.2618 s**, decode **10.5658 tok/s**,
-64 committed output tokens. It was signalled at **629 s**, with approximately
-**632.7 s** whole process wall time including cleanup and excluding the lock
-queue. The second 1280-target turn was incomplete. This run had started before
-the new command-wide deadline was loaded. Its server and process group exited,
-and the lock was released. No score was published.
+To reproduce via the existing evaluator package, let `RF_ADAPTER` point to
+its installed `adapter.py` and `RF_ENGINE` to its pinned tool binary:
 
-The scored workload is now one repetition of three turns at **1024, 8192 and
-32000** tokens, still exactly 64 outputs each. Only repeats/turns were reduced;
-all context buckets remain, including the largest target. The full run of that
-minimum workload used the fresh VibeSys worktree's interpreter and installed
-serving/build dependencies. It timed out during the 8192-target second turn.
-The 32000-target third turn was not reached. Only the 1024-token first turn
-completed: TTFT **99.5051 s**, decode **10.1565 tok/s**, 64 output tokens.
-The deadline fired at 600 seconds; measured whole wall time including cleanup
-was **606.0507 s**. The official protocol contains hello plus error, no result.
-Both benchmark and owned server processes exited, releasing the GPU lock. The new 600-second command timer
-interrupts blocking startup and requests, unwinds through server cleanup, and
-writes an error row plus partial observations rather than a fabricated score.
-The minimum three-bucket workload still cannot produce a valid baseline within
-600 seconds. Further turn/repetition reductions would omit a required bucket;
-the baseline prefill path needs work before this task is optimization-ready.
+```sh
+python3 "$RF_ADAPTER" --engine "$RF_ENGINE" -- \
+  .vibesys/tasks/flint-m3pro/benchmark/run.py --workload quick \
+  --vs-output /tmp/flint-quick.jsonl --output-json /tmp/flint-quick.json
+python3 "$RF_ADAPTER" --engine "$RF_ENGINE" -- \
+  .vibesys/tasks/flint-m3pro/benchmark/run.py --workload full \
+  --vs-output /tmp/flint-full.jsonl --output-json /tmp/flint-full.json
+```
 
-[Structured measurements](flint-bundle-measurements.json) records the completed
-turns, the over-budget reduced attempt and the current accuracy failure. No
-valid aggregate baseline or unmeasured long-context throughput is claimed.
+## Verification and qualification
 
-## Design and next steps
+29 hermetic task tests pass, covering the unchanged gate's injected wrong
+output rejection, pack provenance, protocol v2, fixed denominators, late
+completion censoring, pre-deadline failures, summary mapping and asynchronous
+writer skew. Tests use deterministic RF-shaped records, injected timer/transport
+Fakes and temporary files; no sleeps or real model execution.
 
-Disk admission/location belongs to the trusted launcher; atomic shared-cache
-lifetime belongs to the serving cache policy; computed-table compatibility
-belongs to packs and binding belongs to the compiler. The existing dependency
-direction is preserved, without a VibeSys graph edge. The mechanism fixed was
-optional pack selection falling through to automatic unbounded preparation;
-target and draft call sites were swept. Read-only explicit selection was chosen
-over implicit cache fallback. Raw-ID callbacks were chosen over mutable
-backend diagnostics to keep request ownership clear.
+VibeSys format and lint scripts pass. Both tasks pass `vibesys validate`,
+all six selected external-example registry checks pass, and fork hygiene plus
+Ruff E9/F/I pass for the changed task modules.
 
-Both requested measurements have run. The scored workload is already reduced
-to one turn in each of three retained buckets, and still times out. Fix or
-optimize native prefill before retrying the full benchmark; do not drop a bucket,
-hide startup work or publish partial observations as a score. Fetch and
-merge `flint-model` again when it advances. When its handoff publishes the
-accuracy gate, implement that exact specification in the immutable checker,
-including an injected-bug rejection test, then rerun under the lock. Advance
-the VibeSys submodule pin and merge/push normally after a fresh fetch. Keep all
-servers owned and cleaned up; do not launch optimization from an unqualified
-candidate.
+Both requested preflights pass with `settings.valid=true`, `uses_docker=false`,
+backend `metal`, an available evaluator and all six dynamic roles:
+
+```sh
+uv run vibesys preflight \
+  --project examples/model-serving/repositories/lithos-metal \
+  --task flint-m3pro-quick --outer-loop dynamic --backend metal --local \
+  --cli-provider codex --model gpt-6.1-sol \
+  --max-in-flight 2 --evaluation-slots 1
+uv run vibesys preflight \
+  --project examples/model-serving/repositories/lithos-metal \
+  --task flint-m3pro --outer-loop dynamic --backend metal --local \
+  --cli-provider codex --model gpt-6.1-sol \
+  --max-in-flight 2 --evaluation-slots 1
+```
+
+The historical bespoke baseline completed its 1024-token request at
+99.5051 seconds TTFT and 10.1565 decode tokens/s before timing out on the next
+request. Whole wall time was 606.0507 seconds. It is superseded, not an RF score.
+The unchanged exact-pin accuracy checker last passed all four semantic probes
+and the first pin, then failed `port-2` at zero-based token 22: expected 3087,
+received 220. No threshold was loosened. The port's long-context frozen gate
+is still pending; performance diagnostics alone do not qualify a candidate.
+
+[Structured measurements](flint-bundle-measurements.json) retain historical
+observations and RF results as they complete. Finish both real RF runs, merge
+new port commits when published, then advance the VibeSys submodule pointer
+and merge/push the experiment normally. Do not launch optimization agents
+until the independent accuracy gate qualifies the port.
