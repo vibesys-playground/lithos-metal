@@ -320,3 +320,25 @@ the observed maximum flip margin is 0.15625, giving an initial 0.3125 threshold
 and 98.6328125% stable-position coverage. The final threshold uses the entire
 fixed reference calibration family, including long contexts, rather than this
 single preliminary pair. No native margin participates in setting it.
+
+### Isolated-block localization
+
+[Detailed localization measurements](flint-localization.json) replay all 49
+blocks on the same 72-row reference inputs, resetting each block's cache. The
+first measurable native difference is ordinary projection rounding: layer-0 QKV
+max absolute error 0.03125, relative L2 0.00379304; reference FP32 widening gives
+0.01597118 and 0.00316892. There is no initial large residual error. The cumulative
+layer-0 MLP residual has max error 0.0234375 for both native and a BF16 reference
+ordering change, relative L2 0.0288868 versus 0.0287299.
+
+Isolated routing changes 59/3384 native sets versus 72/3384 under FP32 reference
+arithmetic. All 3384 native selections are valid top-6 for their own BF16 router
+logits. Every changed native set has a reference sixth/seventh logit gap no
+greater than 0.015625. For example, layer 16 position 48 swaps experts 138/1
+whose reference logits differ by 0.0078125. Its local MLP relative error rises
+to 0.0636354, versus 0.00445331 for the FP32 comparison that did not cross this
+particular boundary. Layer 28 similarly crosses a 0.0078125 cutoff. Thus a
+pointwise ratio to one reference comparison is not an accumulation model: a
+discrete near-tie route can amplify an ordinary BF16 rounding difference. The
+fixed full reference family, all-layer routing statistics and whole-model
+limits remain necessary; these local ratios do not adjust any threshold.
