@@ -41,7 +41,7 @@ requantization, alternate weights and KV quantization are forbidden. KV must
 be BF16. The checkpoint's rec configuration contains quantized-KV defaults;
 those defaults do not authorize using them here. No speculative draft model
 is supplied. The baseline launcher preserves input normalization before
-projections with `--no-commute-norm`, matching the reference's BF16 rounding. Changes must retain greedy output agreement.
+projections with `--no-commute-norm`, matching the reference's BF16 rounding. Changes must pass the interim accuracy gate below.
 
 Do not modify `.vibesys/tasks/`, model weights, reference pins, the accuracy
 gate, benchmark, objectives, or launcher. VibeSys protects task inputs. Do not
@@ -181,14 +181,30 @@ checkout; it executes this candidate's `monolith.serve` module.
 ## Accuracy
 
 `accuracy_checker/checker.py` runs four semantic probes (arithmetic, Python
-semantics and multi-turn recall) plus at least four independent greedy pins.
-Every 32-token pin must match exactly, on two passes in opposite order, with
-no short-output tolerance or tunable threshold. Prompt IDs must also match
-the pinned tokenizer's chat template. Raw completion IDs and visible decoded
-text are both checked. A server without `completion_token_ids` fails closed;
-the gate never reconstructs missing special tokens or accepts text as a
-substitute for raw IDs.
-Missing pins fail closed and never become a passing baseline.
+semantics and multi-turn recall) and four greedy pins. Pins use the serving
+endpoint, both orders, and exactly 32 raw completion ids. Prompt IDs must
+match the pinned chat template. A token may differ from the pin only when
+the pinned reference top-1 minus top-2 margin at that position is below
+0.3125. Comparison of that pin stops at the first such difference. A margin
+of 0.3125 or more fails. Visible text must match the decode of the raw ids
+returned. A short output fails. A server without `completion_token_ids`
+fails closed. The gate never reconstructs missing special tokens or accepts
+text as a substitute for raw IDs. Missing pins fail closed.
+
+The same command then runs a protected teacher-forced check on a fixed
+1024-token prefix. `accuracy_checker/teacher_forced.py` executes this
+candidate's prefill engine and reads its logit buffer. There is no logits
+HTTP route. The driver does not accept a logit file or a pass flag. Against
+the pinned rec trace, max absolute error must be at most 22.5, relative L2
+at most 0.19047058, and cosine at least 0.99509772. A top-1 difference is
+allowed only where the reference margin is below 0.3125. A missing trace, a
+hash mismatch, a missing row, a non-finite value, or a shape mismatch fails
+closed.
+
+Thresholds and trace hashes are fixed in
+`accuracy_checker/interim_gate_v0.json`. Do not edit that file,
+`reference/pin_margins.json`, or the checker. This interim gate is replaced
+later by the frozen `flint_gate_v1.json` from the port workstream.
 
 The independent reference uses the same pinned INT4 weights through rec's
 plain `QATModel.native` MLX forward with explicit unquantized BF16 KV caches,

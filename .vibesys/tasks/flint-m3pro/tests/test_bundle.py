@@ -126,6 +126,9 @@ class PinTests(unittest.TestCase):
             path.write_text(json.dumps(payload))
             return load_pins(path)
 
+    def margins(self, pins, value=1.0):
+        return {pin["id"]: [value] * 32 for pin in pins}
+
     def server(self, pins, corrupt=False):
         replies = {
             json.dumps(messages): answer
@@ -150,10 +153,13 @@ class PinTests(unittest.TestCase):
 
     def test_pins_and_probes_pass_and_any_divergence_fails(self):
         pins = self.load(self.payload())
-        result = check_accuracy(self.server(pins), FakeTokenizer(), pins)
+        result = check_accuracy(self.server(pins), FakeTokenizer(), pins, self.margins(pins))
         self.assertEqual(result["pins_passed"], 4)
+        self.assertEqual(result["tolerated_pin_stops"], [])
         with self.assertRaisesRegex(ValueError, "diverged at token 0"):
-            check_accuracy(self.server(pins, corrupt=True), FakeTokenizer(), pins)
+            check_accuracy(
+                self.server(pins, corrupt=True), FakeTokenizer(), pins, self.margins(pins)
+            )
 
     def test_special_tokens_require_raw_ids_even_when_visible_text_matches(self):
         pins = self.load(self.payload())
@@ -185,13 +191,13 @@ class PinTests(unittest.TestCase):
                 return body
 
         server = RawServer()
-        check_accuracy(server, SpecialTokenizer(), pins)
+        check_accuracy(server, SpecialTokenizer(), pins, self.margins(pins))
         server.corrupt = True
         with self.assertRaisesRegex(ValueError, "diverged at token 0"):
-            check_accuracy(server, SpecialTokenizer(), pins)
+            check_accuracy(server, SpecialTokenizer(), pins, self.margins(pins))
         server.corrupt, server.missing = False, True
         with self.assertRaisesRegex(ValueError, "requires raw completion_token_ids"):
-            check_accuracy(server, SpecialTokenizer(), pins)
+            check_accuracy(server, SpecialTokenizer(), pins, self.margins(pins))
 
     def test_pin_provenance_and_schema_fail_closed(self):
         for field, value in (
@@ -224,7 +230,7 @@ class PinTests(unittest.TestCase):
         pins = self.load(self.payload())
         pins[0]["prompt_token_ids"] = [0]
         with self.assertRaisesRegex(ValueError, "Chat-template mismatch"):
-            check_accuracy(self.server(pins), FakeTokenizer(), pins)
+            check_accuracy(self.server(pins), FakeTokenizer(), pins, self.margins(pins))
 
     def test_source_scan(self):
         for source in (

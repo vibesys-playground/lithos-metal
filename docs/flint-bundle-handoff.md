@@ -1,15 +1,16 @@
 # Flint M3 Pro bundle operator handoff
 
 Updated 2026-10-21 PDT (2026-10-22 UTC). No optimization agents have been
-launched. Accuracy qualification is still pending in the port workstream.
+launched. The enforced gate is the interim gate below. It is replaced when
+the port workstream publishes `tools/goldens/gate/flint_gate_v1.json`.
 
 ## Enforced accuracy gate and starting eligibility
 
-**The current starting candidate fails the enforced gate. Neither task can
-start an optimization run from this input today.** Passing configuration
-preflight is not a passing accuracy result. The real RF measurements here are
-direct evaluator-adapter performance diagnostics, not framework-accepted
-baselines and not optimization runs.
+**Interim gate v0. The starting candidate passes it. A no-sink mutation of
+that candidate fails it.** Passing configuration preflight is not a passing
+accuracy result. The real RF measurements here are direct evaluator-adapter
+performance diagnostics, not framework-accepted baselines and not
+optimization runs.
 
 Both `flint-m3pro-quick` and `flint-m3pro` invoke the identical
 `.vibesys/tasks/flint-m3pro/accuracy_checker/checker.py` command under the GPU
@@ -19,24 +20,77 @@ lock, with an 1800-second accuracy timeout. Both retain the schema's enforced
 - The mechanical serving-source audit and pinned checkpoint/tokenizer/template provenance.
 - Four semantic probes: arithmetic, Python list length and two conversation
   recall cases. Each asks for at most 64 tokens and checks its fixed regex.
-- Exactly four current reference pins: `port-1`, `port-2`, `code-0`, `code-1`.
-  Each requests exactly 32 greedy tokens and must match every raw token ID,
-  the 32-token usage count and the pinned visible text. Prompt token IDs must
-  match the pinned chat template. Every pin must pass in forward and
-  reverse order; the check stops at the first failure. There is no tolerance
-  or short-output allowance.
+- The same four pins: `port-1`, `port-2`, `code-0`, `code-1`. Each requests
+  exactly 32 greedy tokens through the serving endpoint, in forward and
+  reverse order. Prompt token IDs must match the pinned chat template, and
+  the response must carry 32 raw completion ids whose visible text matches
+  their decode. A token may differ from the pin only when the pinned
+  reference top-1 minus top-2 margin at that index is below 0.3125. That pin
+  then stops. A margin of 0.3125 or more fails. There is no short-output
+  allowance.
+- A teacher-forced check of 1024 positions. The protected driver
+  `accuracy_checker/teacher_forced.py` runs this candidate's prefill engine
+  and reads its logit buffer. It is not an HTTP route and it does not accept
+  a logit file or a pass flag. Limits, against the pinned rec trace: max
+  absolute error at most 22.5, relative L2 at most 0.19047058, cosine at
+  least 0.99509772, and top-1 differences only where the reference margin is
+  below 0.3125. A missing file, a hash mismatch, a missing row, a non-finite
+  value, or a shape mismatch fails closed.
 
-The latest recorded real check passed all four semantic probes and `port-1`,
-then failed `port-2` at zero-based token **22**, expected **3087**, actual
-**220**. No model arithmetic changed during this RF continuation. This exact
-pin failure therefore still blocks the starting candidate, even though the
-port is investigating it as a reference-noise-level winner change.
+Thresholds and hashes live only in
+`accuracy_checker/interim_gate_v0.json`. Each limit is twice a rec BF16
+chunk-1 versus chunk-32 figure from the port handoff section "Semantic
+mutation evidence":
 
-The exact checker and reference pins are unchanged by this work. No threshold
-has been changed or loosened. The separate port workstream is freezing a
-teacher-forced gate and will supply a pinned threshold file later. That file
-has **not** been received or wired into either task; the teacher-forced gate
-is not the gate these tasks enforce today.
+| Check | Limit | Source measurement |
+| --- | ---: | --- |
+| Greedy and top-1 margin | 0.3125 | 2 x 0.15625 winner-change margin |
+| Max logit absolute error | 22.5 | 2 x 11.25 |
+| Relative L2 | 0.19047058 | 2 x 0.09523529 |
+| Minimum cosine | 0.99509772 | 1 - 2 x (1 - 0.99754886) |
+
+`1 - 0.99754886` is slightly above the rounded distance 0.00245114. The
+pinned cosine limit equals `1 - 2 x (1 - 0.99754886)`, which is the approved
+value 0.99509772.
+
+Reference margins are `reference/pin_margins.json`, sha256
+`38c73864ce1f6f78922d57899761fee677fdf11c1c1a7e373ed73712183dde35`. They were
+recorded from rec commit `e53663b` with plain `QATModel.native`, BF16,
+unquantized KV, prefill chunk 128, and the pinned tokens fed back in.
+Reference top-1 matched every pinned token. `port-2` index 22 has margin
+0.203125, so the previously blocking winner change is inside the interim
+allowance. The 1024-id prefix is example 1 of the int4 golden, 72 ids
+repeated and truncated; its sha256 is
+`4930907e7e0ea1a8412c9649855ae8a2e7467c3a8951033e507b5c6ba4878e4b`. The rec
+BF16 chunk-32 logit trace is stored outside git as
+`flint-gate/rec-bf16-chunk32-logits-1024.npy` under the lithos-metal cache,
+sha256 `591792617113cf245d10c9dc645b8a610d76f606bae8bad9cd432b7b54a8fd0e`,
+shape `(1024, 150144)` float32.
+
+The 1k driver uses 32-row prefill, `commute_norm` off, accelerator off, and
+prefill optimizations off: the long-context schedule the port measured, not
+the server `auto-exact` default. Greedy pins still use the real serving
+endpoint. Residual trust gap: the 1k check does not exercise the HTTP
+handler, and a candidate that special-cases this in-process session could
+hide a serving-only numerical change. It cannot pass by returning a file.
+
+On the unmodified starting candidate the full checker passed in 425 seconds
+(19:46:33 to 19:53:38 PDT). Probes 4, pins 4, both orders. The only tolerated
+stops were `port-2` token 22, margin 0.203125, on both passes. Logits: max
+absolute error 11.625, relative L2 0.0826342471188159, minimum cosine
+0.9976552267531771, 2 top-1 mismatches at positions 56 and 97, largest
+mismatch margin 0.1328125.
+
+Disabling attention sinks after weight binding, the same counterfactual as
+the port handoff, failed the checker (exit 1, 19:57:17 to 20:01:31 PDT).
+Semantic probe 0 failed before any pin was scored. The 1k check still ran:
+max absolute error 69.25, relative L2 1.036409359474286, minimum cosine
+0.9526978627987024, 323 top-1 mismatches, largest mismatch margin
+20.2109375 at position 43. Those are the port's published no-sink figures.
+The sink change was not committed.
+
+This interim file is not `flint_gate_v1.json`. Do not retune these limits
+when that frozen file arrives; replace the gate with it.
 
 ## Current integration
 
@@ -283,19 +337,21 @@ uv run vibesys preflight \
 The historical bespoke baseline completed its 1024-token request at
 99.5051 seconds TTFT and 10.1565 decode tokens/s before timing out on the next
 request. Whole wall time was 606.0507 seconds. It is superseded, not an RF score.
-The unchanged exact-pin accuracy checker last passed all four semantic probes
-and the first pin, then failed `port-2` at zero-based token 22: expected 3087,
-received 220. No threshold was loosened. The port's long-context frozen gate
-is still pending; performance diagnostics alone do not qualify a candidate.
+The interim gate above is what both tasks enforce. The old exact-pin checker
+had failed `port-2` at token 22 (expected 3087, received 220) on a reference
+margin of 0.203125. That exact rule is no longer the enforced gate. The
+port's frozen `flint_gate_v1.json` is still pending and replaces this interim
+file when it arrives. Performance diagnostics alone do not qualify a candidate.
 
 [Structured measurements](flint-bundle-measurements.json) retain historical
 observations, the superseded calibration and both final RF configurations.
 Both requested real benchmarks have completed, and both protocol rows parse.
 No RF change was needed, no weights or packs were copied, and all owned model
 servers and benchmark processes have exited. Both configuration preflights
-pass; the exact-pin accuracy gate still fails and blocks an optimization run.
+pass. The interim accuracy gate passes the starting candidate and fails
+the uncommitted no-sink mutation, so an optimization run is no longer blocked
+by the exact-pin near-tie. No optimization agents have been launched.
 
-The next accuracy step belongs to the separate port workstream: provide its
-pinned, frozen teacher-forced threshold file and an explicit follow-up to wire
-it into the shared checker. Until then both tasks continue to enforce the
-unchanged exact 32-token pins. No optimization agents have been launched.
+The next accuracy step belongs to the separate port workstream: publish
+`flint_gate_v1.json` and replace `interim_gate_v0.json` with it. Do not
+loosen the interim limits while waiting.
