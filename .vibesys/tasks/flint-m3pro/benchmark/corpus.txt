@@ -204,8 +204,8 @@ def cost_table(ms: Mapping[int, float]) -> Dict[int, float]:
 def accelerator_plan(shader: Mapping[str, Mapping[int, float]], tile: Mapping[str, Mapping[int, float]]) -> Tuple[str, Dict[str, int], str]:
     """``(accelerator, accelerator_min_t, why)`` from the shader's cost table and the tile's per format (both in
     units of the format's T = 1 shader pass): per format the smallest T > 1 at which the tile at ``tile_rows(T)``
-    costs no more than the shader's T-pass plus the noise margin — a tie goes to the tile, whose one dispatch covers
-    the whole range the shader needs a variant per T for — ``NEVER`` when it never does; on when any format qualifies."""
+    costs no more than the shader's T-pass plus the noise margin , a tie goes to the tile, whose one dispatch covers
+    the whole range the shader needs a variant per T for , ``NEVER`` when it never does; on when any format qualifies."""
     min_t: Dict[str, int] = {}
     notes = []
     for key, rows in tile.items():
@@ -231,7 +231,7 @@ def accelerator_plan(shader: Mapping[str, Mapping[int, float]], tile: Mapping[st
 def attention_choice(v1: Mapping[Any, float], v2: Mapping[Any, float], rep: int = 4, v3: Optional[Mapping[Any, float]] = None) -> Tuple[str, str]:
     """``(attention, why)`` from the kernels' ms per (context, T). With v3 measured: ``auto`` (= v3, the emitter's rule)
     when it was measured at every point v1 was and beats v1 and, where measured, v2 at each by more than the margin;
-    otherwise — or without v3 — the v1 / v2 rule: ``v2`` when it wins at every point, ``v1`` otherwise."""
+    otherwise , or without v3 , the v1 / v2 rule: ``v2`` when it wins at every point, ``v1`` otherwise."""
     base, why = _attention_choice_v12(v1, v2, rep)
     if not v3:
         return base, why + "; v3 not measured"
@@ -264,7 +264,7 @@ def decide(measurements: Mapping[str, Any], current: Optional[Mapping[str, Any]]
     """The ``engine`` block from the writer's measurements (``tools/profile_writer.py`` builds the mapping:
     ``family``, ``lane_order_gbps`` {order: GB/s}, ``threadgroups_ms`` {count: ms}, ``shader_ms`` {format: {T: ms}},
     ``tile_ms`` {format: {TM: ms}} (the same T = 1 unit), ``attention_ms`` {"v1": {(ctx, T): ms}, "v2": …}) and the
-    current engine block (the values the measurement does not cover — sibling order, max_cb_ms, attention_rows —
+    current engine block (the values the measurement does not cover , sibling order, max_cb_ms, attention_rows ,
     carry over). Returns ``(engine, notes)``."""
     cur = dict(current or {})
     notes: Dict[str, str] = {}
@@ -1233,7 +1233,7 @@ def pack_spec(spec: DequantSpec, layout: PackLayout) -> Tuple[bytes, PackInfo, n
     """``(bytes, info, row_scales)`` with the uniform per-tensor scale as the row-scale table.
 
     The kernel computes ``codes × block scale × row_scale``; ``FORMATS[fmt].dequantize(spec)`` already includes the
-    per-tensor scale, so it IS the oracle — never multiply it by ``row_scales`` again."""
+    per-tensor scale, so it IS the oracle , never multiply it by ``row_scales`` again."""
     fmt = FORMATS.get(spec.format)
     data, info = fmt.pack(spec, layout)
     scale = float(spec.params.get("weight_scale_2", spec.params.get("weight_scale", 1.0)))
@@ -1308,7 +1308,7 @@ def main(argv=None):
         except (ImportError, ValueError, FileNotFoundError, RuntimeError) as exc:
             print(f'lithos-metal: {exc}', file=sys.stderr)
             return 1
-    parser = argparse.ArgumentParser(prog='lithos-metal', description='lithos-metal — local inference on Apple silicon')
+    parser = argparse.ArgumentParser(prog='lithos-metal', description='lithos-metal , local inference on Apple silicon')
     parser.add_argument('--version', action='version', version=f'lithos-metal {__version__}')
     commands = parser.add_subparsers(dest='command', required=True)
     commands.add_parser('serve', help='Serve a model; matching NVFP4 DSpark heads are enabled automatically')
@@ -1943,7 +1943,7 @@ class Autotuner:
     # ---- GEMV ----------------------------------------------------------------------------------------------------
     def tune_gemv(self, info: PackInfo, t: int, epilogue: Optional[str], norm_fed: bool, *, force: bool = False, stat_parts: int = 64) -> Choice:
         """``stat_parts``: the partial sums per token the norm statistic arrives in (the producer's blocks × its row
-        split) — the fused variant folds them in every SIMD-group, so the benchmark must see the program's count."""
+        split) , the fused variant folds them in every SIMD-group, so the benchmark must see the program's count."""
         key = gemv_key(info, t, epilogue, norm_fed, stat_parts)
         if key in self.choices and not force:
             c = self.choices[key]
@@ -2028,7 +2028,7 @@ class Autotuner:
         by format) or the K-split (one tile per threadgroup of 2 or 4 SIMD-groups, for the shapes whose tiles cannot
         occupy the crew), timed on synthetic data like the GEMV variants. ``permute``: an ``x_permute`` dispatch per
         tile (the program's, when the producer does not write the input permuted; ``norm_fed`` = the norm applied on
-        the way from ``stat_parts`` partials) — the tile-versus-shader decision must see the whole path, and a permute
+        the way from ``stat_parts`` partials) , the tile-versus-shader decision must see the whole path, and a permute
         run once before every copy hid it."""
         key = gemm_key(info, tm, epilogue, permute=permute, norm_fed=norm_fed, stat_parts=stat_parts)
         if key in self.choices and not force:
@@ -2050,7 +2050,7 @@ class Autotuner:
         pso, ppso = nt.Pipeline(lib, "gemm_tile"), nt.Pipeline(lib, "x_permute")
         psos = {"crew": pso, "crew2": pso}
         # the K-splits, each with the scale cache where it fits and without it (the cache's registers cost more than the
-        # reload on the 8B's shapes — measured, decode-kernels.md §9); a split finer than the lane groups needs it off
+        # reload on the 8B's shapes , measured, decode-kernels.md §9); a split finer than the lane groups needs it off
         for s in (2, 4, 8, 16):
             try:
                 km = kernels.gemm_macros(pinfo, tm=tm, out_bf16=True, epilogue=epilogue, ksplit=s)
@@ -2165,17 +2165,17 @@ class Autotuner:
 
 Every op of the step program is one ICB command. A command's barrier makes it wait for every command before it in
 the buffer; commands without one may start while their predecessors still run (measured: `tools/bench`,
-2026-09-24 — the flag on the *reader* is what orders a dependency). v0 set the flag on every op. This pass sets it
+2026-09-24 , the flag on the *reader* is what orders a dependency). v0 set the flag on every op. This pass sets it
 only where a real dependency needs it: an op joins the *open group* (the ops since the last barrier, all possibly
-running together) unless it writes a buffer the group reads or writes, or reads a buffer the group writes — buffer
+running together) unless it writes a buffer the group reads or writes, or reads a buffer the group writes , buffer
 granularity, so a value's row views alias their whole base. When an op conflicts with the group but not with the op
 just before it, the barrier goes on that previous op instead and the two run together (a gate GEMV encoded before
 its mixer core still overlaps the core rather than the projection it followed). The predicated per-T variants of
 one GEMV are mutually exclusive and join without a check; the first op of the step always waits (for the previous
 step's tail).
 
-The pairs this frees are the ones §5.12 wants overlapped — a mixer's ALU-bound core and the bus-bound GEMV of its
-gate projection — plus whatever else the lowering left independent (the drafter's context projections next to the
+The pairs this frees are the ones §5.12 wants overlapped , a mixer's ALU-bound core and the bus-bound GEMV of its
+gate projection , plus whatever else the lowering left independent (the drafter's context projections next to the
 block's, the sampling reductions' partials). The emitter records each op's written bindings in ``meta["writes"]``;
 an op without that record is treated as writing everything it binds.
 """
@@ -2451,7 +2451,7 @@ class _Ctx:
         return k
 
     def params(self, name: str, data: bytes) -> str:
-        # programs share a session's buffers by name (Engine): a params record must never be shared — the dynamic-T
+        # programs share a session's buffers by name (Engine): a params record must never be shared , the dynamic-T
         # program and a static one at its t_max both said "T8", and a static T = 8 program's o_proj tiles read another
         # GEMV's record (24576 rows into a 4096-row output: out-of-bounds loads and stores, 16 s steps, #113)
         bname = f"params.{'D' if self.dynamic_t else 'S'}{self.t}.{name}.{self.counter}"
@@ -2546,7 +2546,7 @@ def _value_bytes(v: Value, t: int) -> int:
 
 
 def _size_stat(ctx: _Ctx, name: str) -> None:
-    """A hoisted statistic's buffer: its rows (the value's own row bound — an LM drafter's first chain step has
+    """A hoisted statistic's buffer: its rows (the value's own row bound , an LM drafter's first chain step has
     T_max + 1) × the partials per token its producer writes (the blocks × the row split). Sized here, where the
     producer's choice is known; shader validation found the earlier ``T_max × n_blocks`` short on both counts."""
     v = ctx.values[name]
@@ -2706,8 +2706,8 @@ def _gemv(ctx: _Ctx, op: Op) -> None:
         rs = int(str(c.macros.get("RSPLIT", "1")).rstrip("u")) if c else 1
         rsplits.append(rs if c is None or rs in kernels.gemv_rsplits(info.rows, int(c.macros["RG"]), epilogue) else 1)
     if stat_out is not None:
-        # the statistic's partial count is one number for its consumer: every writer of the op — each shader variant and the
-        # tile, which writes one partial per block — must agree on it, so with a tile every variant keeps RSPLIT = 1, and
+        # the statistic's partial count is one number for its consumer: every writer of the op , each shader variant and the
+        # tile, which writes one partial per block , must agree on it, so with a tile every variant keeps RSPLIT = 1, and
         # without one the variants take the smallest split they all admit (a mismatch fed the next norm garbage partials
         # from the rows a prefill chunk sent through the tile: decode-kernels.md §10)
         if tile_range is not None:
@@ -2803,21 +2803,21 @@ def _accel_plan(ctx: _Ctx, info: PackInfo, op: Op, t_c: int, t_src: int, variant
     except ValueError:
         return variants, None                                          # the shape or the range is not the tile's: the shader path
     if ctx.tuner is not None and rr is None and t_c <= 32:
-        # the tuner has timed both paths on this shape: the tile at TM rows and the shader at the range's top T — where the
+        # the tuner has timed both paths on this shape: the tile at TM rows and the shader at the range's top T , where the
         # shader wins (K = 1024 slabs at T ≤ 8: the tile's fill has too few K steps to amortize; decode-kernels.md §11)
         # the T variants stay on it. A row range keeps the profile's rule (its tile share is the whole op's).
         norm_in = op.attrs.get("norm")
         parts_in = ctx.stat_parts.get(op.inputs[2].name, 1) if norm_in else 1
         shader = ctx.tuner.tune_gemv(info, t_c, op.attrs.get("epilogue"), bool(norm_in), stat_parts=parts_in)
         # the tile path of a norm-fed input is a permute dispatch (the norm applied on the way) plus the tile; an
-        # un-normed input is written permuted by its producer (the attention merge, the silu·mul tile) — no permute
+        # un-normed input is written permuted by its producer (the attention merge, the silu·mul tile) , no permute
         tile = ctx.tuner.tune_gemm(info, tm, op.attrs.get("epilogue"), permute=bool(norm_in), norm_fed=bool(norm_in), stat_parts=parts_in)
         shader_ms, tile_ms = (shader.ms if shader else 0.0), (tile.ms if tile else 0.0)      # a shape without a measured choice keeps the rule
         if shader_ms > 0 and tile_ms > 0 and shader_ms < tile_ms:
             return variants, None
     if t_src == STATIC_ROWS or not ctx.dynamic_t:
         # a static row count, or a static-T program (T fixed at compile time: the T-variant predication lives behind
-        # STEP_STATE, so a shader variant emitted beside the tile would run whole — every slab streamed twice; the
+        # STEP_STATE, so a shader variant emitted beside the tile would run whole , every slab streamed twice; the
         # static T > 1 programs of the layer bench measured 2× the round's tiles until this, decode-kernels.md §11)
         return [], (0, t_c)                                            # the tile alone, unpredicated
     shader = [tv for tv in _prune_variants(ctx, variants if len(variants) > 1 else t_variants(t_c), t_src) if tv < min_t]
@@ -2826,7 +2826,7 @@ def _accel_plan(ctx: _Ctx, info: PackInfo, op: Op, t_c: int, t_src: int, variant
 
 def _prune_variants(ctx: _Ctx, variants: List[int], t_src: int) -> List[int]:
     """Drop the per-T variants of the step's row count (``t_this_step``) whose whole range lies below the program's
-    ``t_min`` (the next variant's range then starts at 0, so a prefill chunk that small still runs — on the next
+    ``t_min`` (the next variant's range then starts at 0, so a prefill chunk that small still runs , on the next
     variant up); a single variant stays, and the injection's variants (``n_inject`` can be 1) are never pruned."""
     if len(variants) <= 1 or ctx.t_min <= 1 or t_src != 0:
         return variants
@@ -2835,8 +2835,8 @@ def _prune_variants(ctx: _Ctx, variants: List[int], t_src: int) -> List[int]:
 
 
 def _tile_alone(ctx: _Ctx, op: Op, *, allow_norm: bool = False) -> Optional[Tuple[int, int, int, int, int, int]]:
-    """``(tm, wpw, tk, t_src, lo, hi)`` when GEMV ``op`` runs on the tile alone — every T of the program in one tile
-    dispatch, no shader variant — else None. The same decision ``_gemv`` makes, taken ahead of it for the op that
+    """``(tm, wpw, tk, t_src, lo, hi)`` when GEMV ``op`` runs on the tile alone , every T of the program in one tile
+    dispatch, no shader variant , else None. The same decision ``_gemv`` makes, taken ahead of it for the op that
     produces its input."""
     if op.kind not in ("gemv", "lm_head") or (op.attrs.get("norm") and not allow_norm):
         return None
@@ -2949,7 +2949,7 @@ def _projection_convolution(ctx: _Ctx, op: Op, info: PackInfo, hi: int, t_src: i
 def _gemm_tile(ctx: _Ctx, op: Op, info: PackInfo, t_range: Tuple[int, int], t_src: int,
                block0: int, n_blocks: int, n_rows: int, nbytes: int, vgroup: Optional[int]) -> None:
     """The tile dispatch of a GEMV for the T in ``t_range`` (design §5.7 predication): the input goes through
-    x_permute once per (input, statistic, tile) — the norm applied on the way when the op carries one — into a
+    x_permute once per (input, statistic, tile) , the norm applied on the way when the op carries one , into a
     scratch the siblings share, then gemm_tile with the op's epilogue, statistic output and row range."""
     ins = list(op.inputs)
     x, w = ins[0], ins[1]
@@ -3023,7 +3023,7 @@ def _gemm_tile(ctx: _Ctx, op: Op, info: PackInfo, t_range: Tuple[int, int], t_sr
         if stat is not None:
             bindings += [(1, *ctx.buf(stat)), (2, *ctx.windows[nw.name])]
         # not a member of the variant group: the barrier pass joins a group's members without a check (they are
-        # alternatives), and the tile must wait for this permute — its own identity gives the tile the barrier
+        # alternatives), and the tile must wait for this permute , its own identity gives the tile the barrier
         ctx.add(pk, bindings, *kernels.x_permute_grid(padded_rows, groups=perm_groups, simdgroups=perm_simdgroups), f"x_permute:{y.name}", writes=[3], kind="x_permute", t_variant=hi,
                 t_range=[lo, hi] if predicated else None, normed=stat is not None)
     choice = ctx.tuner.tune_gemm(info, tm, epilogue) if ctx.tuner is not None else None
@@ -3155,7 +3155,7 @@ def _gqa_geometry(ctx: _Ctx, a: Dict[str, Any], ctx_max: int, v2: bool):
     rep = heads // kv
     norm = {} if a.get("qk_norm", True) else {"QK_NORM": "0"}
     if v2:
-        # v2's threadgroups: attention_v2_threadgroups per core — from the core count, not the crew (n_sg already carries the
+        # v2's threadgroups: attention_v2_threadgroups per core , from the core count, not the crew (n_sg already carries the
         # profile's threadgroups_per_core: dividing it by 12 doubled v2's grid on a two-threadgroup profile)
         return dict(kernels.gqa_v2_macros(d, rmax=rep * ctx.t, rg=min(4, rep * ctx.t)), STEP_STATE="1", **norm), ctx.cores * ctx.attn_v2_tg, kernels.GQA_V2_CHUNK_MIN
     chunk = int(a.get("chunk", 64))
@@ -3239,7 +3239,7 @@ def _gqa(ctx: _Ctx, op: Op) -> None:
 
 def _gqa_chunk_capacity(ctx: _Ctx, part_o: Value, part_md: Value, ctx_max: int, kv: int, rep: int, d: int, chunk: int, n_sg: int, *, fixed: bool = False) -> int:
     """The chunk count the core's and the merge's params carry: the run-time chunk rule (``pick_chunk``, bounded by
-    ``n_chunks_max``) for this dispatch's crew, capped at the partial values the layer allotted — it sized them for a
+    ``n_chunks_max``) for this dispatch's crew, capped at the partial values the layer allotted , it sized them for a
     crew of ``GQA_CREW_MAX`` SIMD-groups, and a larger profile (more cores, two threadgroups per core) would otherwise
     ask for more chunks than they hold. The values must hold the chunks of the compiled ``chunk`` at least."""
     if fixed:
@@ -3303,8 +3303,8 @@ def _gqa_merge(ctx: _Ctx, op: Op) -> None:
 
 
 def _gqa_v3(ctx: _Ctx, op: Op) -> None:
-    """v3: the core and the merge as one dispatch — a threadgroup of gqa_v3_simdgroups(D) SIMD-groups per (kv head, query
-    row) block, the keys strided over the SIMD-groups, the fold in threadgroup memory (kernels/common/gqa_decode_v3.metal) —
+    """v3: the core and the merge as one dispatch , a threadgroup of gqa_v3_simdgroups(D) SIMD-groups per (kv head, query
+    row) block, the keys strided over the SIMD-groups, the fold in threadgroup memory (kernels/common/gqa_decode_v3.metal) ,
     emitted at the merge op, which holds the output and the gate; the core op that produced its partials supplies the
     projection, the caches, the tables and the norms (its partial values stay unwritten)."""
     part_o = op.inputs[0]
@@ -3802,7 +3802,7 @@ def emit_program(g: Graph, *, pack: Union[PackFile, Sequence[PackFile]], profile
     elif tail is not None:
         raise ValueError(f"emit_program: unknown tail {tail!r}")
     # an arena value no dispatch binds is not allocated: the graph allots the attention's partial workspaces for the
-    # two-dispatch kernels, and with v3 (core and merge in one) nothing reads or writes them — the 8B's part_o alone
+    # two-dispatch kernels, and with v3 (core and merge in one) nothing reads or writes them , the 8B's part_o alone
     # is 8 MiB per layer at a 32K context
     bound = {name for op in program.ops for _, name, _ in op.bindings}
     for name in [n for n, spec in program.buffers.items() if spec.role == "arena" and n not in bound]:
@@ -3912,7 +3912,7 @@ def compile_program(model: Model, pack: PackFile, profile: Profile, *, t: Option
     (and its pack) the dynamic-T program carries the speculative round instead of the advance: ``verify`` = ``"cost"``
     (the cost-aware verify-length rule when the profile has a cost table for the pack's dominant format, otherwise the
     threshold rule), ``"threshold"`` (``verify_threshold``; None = 0.5, ≤ 0 = verify the whole block) or ``"fixed"``
-    (``verify_length`` drafts every step — the measurement's baseline). ``prefill=True`` retains dedicated
+    (``verify_length`` drafts every step , the measurement's baseline). ``prefill=True`` retains dedicated
     one-token variants for partial chunks. Without them, the next retained variant's range still extends to
     T=1, allowing a short prompt tail to run through the resident verification graph."""
     layout = layout or StepStateLayout()
@@ -3947,7 +3947,7 @@ def compile_program(model: Model, pack: PackFile, profile: Profile, *, t: Option
     for p in passes:
         p(g)
     # a decode step of the round runs at T = 1 + L: the cost rule never chooses L = 0 (a draft with any confidence scores
-    # above the bare anchor) and a fixed L >= 1 never does, so their programs skip the T = 1 variants — 144 dispatches
+    # above the bare anchor) and a fixed L >= 1 never does, so their programs skip the T = 1 variants , 144 dispatches
     # of the 8B's step that returned at once (decode-kernels.md §8); the threshold rule can pick L = 0 and keeps them
     t_min = 2 if not prefill and (cost is not None or (fixed is not None and fixed >= 1)) else 1
     program = emit_program(g, pack=[pack, drafter_pack], profile=profile, t=t, dynamic_t=True, layout=layout, eos=eos, ring_capacity=ring_capacity,

@@ -19,9 +19,9 @@
   "files": {
     "full.csv": "7bf8d8cbcc5c2e37e355f71502eee201aa9483ef30cc2ee3ed3374a01e3d3295",
     "quick.csv": "60c890f520890c3ab0a8da3f5c273c52e5bdc8c2053f2e2bce3aa3188cd1f5b8",
-    "corpus.txt": "fdfdd3986685b11f629fa01b5e9d3edd6af2a3386c65593c078367295fdf96b0"
+    "corpus.txt": "c5e5c3af9587f8f2f99136fb136af34c2509e2816c94f1b5e2463c482789d8ae"
   },
-  "corpus": "Sorted lithos-metal Python sources through first file reaching 65536 Flint tokens; trailing whitespace removed",
+  "corpus": "Sorted lithos-metal Python sources through first file reaching 65536 Flint tokens; trailing whitespace removed; em dashes normalized to commas",
   "full_source_manifest": {
     "schema": "session-execution-v2",
     "generator": "coding-session",
