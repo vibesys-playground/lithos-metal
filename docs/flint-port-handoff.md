@@ -373,3 +373,18 @@ comparison; JSON metrics and metadata remain. At 18:10 it occupies about 8.3 GiB
 The remaining canonical short traces and 16k reference archive are retained only
 for pending comparisons. At most one GPU-lock command from this thread is
 submitted at a time, allowing the other benchmark commands to interleave.
+
+Canonical capture validation: all three prompts reproduce **192/192** committed
+greedy predictions and every stored top-two logit exactly (maximum error zero).
+The reference checkout is clean at its pinned commit; its `quantized.py` SHA-256
+is `137cbdde8bc91e7148cf120dbabac9e6a209a9e490d3f1b869f51873c751a271`
+and `model.py` is
+`56363f7a1caea2b9db317feb192f4bfea32eccb2b6b190dffc3fa93ee09695b1`.
+The trace loader now rejects tracked reference-source changes as well as a wrong
+commit. The eventual bundle checker must own and pin its reference source too.
+
+The short teacher-forced inputs are exactly each fixture's `prompt_ids +
+greedy_ids[:-1]`, lengths **76, 72, 81**. Long inputs repeat the second fixture's
+72 IDs, truncated to **1024, 4096, 16384**. No generated native ID enters these
+comparisons. This deterministic corpus is public qualification data; it is not a
+claim of accuracy over all inputs.

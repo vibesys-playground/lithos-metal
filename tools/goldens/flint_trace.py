@@ -35,6 +35,22 @@ def reference(args, ids, save):
     ).strip()
     if actual != expected:
         raise ValueError(f"reference revision: expected {expected}, got {actual}")
+    clean = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(args.rec),
+            "diff",
+            "--quiet",
+            "HEAD",
+            "--",
+            "engine/src/rec_mlx",
+        ],
+        timeout=10,
+        check=False,
+    )
+    if clean.returncode != 0:
+        raise ValueError("reference source differs from its pinned commit")
     sys.path.insert(0, str(args.rec / "engine/src"))
     import mlx.core as mx
     from mlx_lm.models.base import create_attention_mask
