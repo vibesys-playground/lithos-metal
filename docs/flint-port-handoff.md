@@ -439,3 +439,45 @@ greedy_ids[:-1]`, lengths **76, 72, 81**. Long inputs repeat the second fixture'
 72 IDs, truncated to **1024, 4096, 16384**. No generated native ID enters these
 comparisons. This deterministic corpus is public qualification data; it is not a
 claim of accuracy over all inputs.
+
+### Checker data contract (final numeric limits still pending)
+
+The protected expected tensor set has **194** names: `embed_tokens.h`, `logits`,
+49 each of `layers.i.self_attn.h` / `layers.i.mlp.h`, and 47 each of
+`layers.i.mlp.router.gate.y` / `layers.i.mlp.ids` (layers 2 through 48). Widths
+are respectively 2048, 150144, 2048, 2048, 256 and 6. Every tensor needs exactly
+the protected input length; missing names/rows, non-finite values, duplicate or
+out-of-range expert IDs, or changed expert cardinality fail closed.
+
+For every position, compute full-vector maximum absolute error, relative
+`L2(native-reference) / max(L2(reference), 1e-30)`, and cosine distance `1-cos`.
+For every named numeric tensor, retain maximum, p99 (linear interpolation) and
+mean of the per-position absolute and relative errors, plus maximum and mean
+cosine distance. Here “mean absolute error” means the mean of **per-position
+maximum component errors**, not an average that dilutes error over the vocabulary.
+For each routing layer, use exact unordered set disagreement and mean
+`1 - intersection_size/6`, weighting positions equally across chunk boundaries.
+
+For each scalar independently, the fixed rule is **2 × the largest value from
+any complete predeclared reference-only comparison**, pooled over the declared
+lengths/configurations, separately for each tensor. Never pool layers to hide a
+failing layer, average away a failing metric, or discard a prompt/outlier. The
+margin rule is **min(2 × largest reference winner-change margin, 2 × largest
+reference top-two-gap error)**, including the measured first-divergence margins
+of reference-only free-running alternatives. Require native top-1 equality at
+every position whose reference margin is strictly above that frozen threshold.
+
+Run all three 64-token native greedy continuations. The first different token,
+if any, must itself have a committed reference margin at or below the threshold;
+matching a previous ambiguous position does not excuse a later stable error.
+Later free-running tokens follow a different history, while the teacher-forced
+checks continue to compare identical prefixes at every position.
+
+Copy the final numeric limits, expected IDs/shapes, reference source and semantic
+leaf checks into bundle-owned protected data and pin their hashes. The candidate
+must neither choose the reference configurations nor supply thresholds or a
+trusted `qualified` flag. Candidate checking and timing must use the same actual
+arithmetic path; diagnostic copies may preserve intermediates, but the checker
+must not select an accuracy-only fallback. The same frozen limits must reject
+the measured whole-model no-sink mutation, alongside the independent strict
+2-ULP window/sink/no-RoPE leaf contracts.
