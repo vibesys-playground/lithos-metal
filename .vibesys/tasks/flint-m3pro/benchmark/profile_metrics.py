@@ -12,6 +12,10 @@ from pathlib import Path
 
 from vs_protocol import ResultWriter
 
+# Server warmup also logs generations, before its readiness message. Only
+# generations after that boundary belong to RF; do not assume a warmup count.
+READY_MARKER = "lithos-metal ready: "
+
 # Pinned RF 89dce4a sends exactly two cache-check completions before opening its
 # workload log (src/backend/preflight.rs). Keep these as startup diagnostics and
 # require the exact count; never silently assign a probe to a workload request.
@@ -50,10 +54,17 @@ def profile_values(planned, records, server_logs, startup_seconds):
     ):
         raise ValueError("Profile requires every quick request to complete in trace order")
     generations = []
+    ready = False
     for log in server_logs or ():
         for line in log.splitlines():
-            if "Generation: " in line:
+            if READY_MARKER in line:
+                if ready:
+                    raise ValueError("Duplicate native server readiness boundary")
+                ready = True
+            elif ready and "Generation: " in line:
                 generations.append(ast.literal_eval(line.split("Generation: ", 1)[1]))
+    if not ready:
+        raise ValueError("Missing native server readiness boundary")
     if len(generations) != len(expected) + PREFLIGHT_GENERATIONS:
         raise ValueError("Native generation count differs from completed quick requests")
     values = {"startup_duration_s": _number(startup_seconds, "startup_duration_s")}
@@ -108,7 +119,8 @@ def synthetic_profile(planned):
         for row in planned
     ]
     logs = [
-        "\n".join(
+        "INFO:monolith.serve:" + READY_MARKER + "synthetic server\n"
+        + "\n".join(
             "INFO:monolith.serve:Generation: "
             + repr(
                 {

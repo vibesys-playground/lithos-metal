@@ -28,7 +28,8 @@ class ProfileTests(unittest.TestCase):
 
     def logs(self, **changes):
         return [
-            "\n".join(
+            "INFO:__main__:lithos-metal ready: diagnostic server\n"
+            + "\n".join(
                 "INFO:monolith.serve:Generation: "
                 + repr(
                     {
@@ -57,6 +58,32 @@ class ProfileTests(unittest.TestCase):
         self.assertEqual(hello["protocol"], 2)
         self.assertEqual(result, {"kind": "result", "values": values})
         self.assertFalse(any("direction" in spec for spec in hello["metrics"].values()))
+
+    def test_startup_warmups_are_excluded_without_assuming_their_count(self):
+        expected = profile_values(self.planned, self.records(), self.logs(), 12.0)
+        warmup = "INFO:__main__:Generation: " + repr(
+            {name: 9999.0 for name in PHASES.values()}
+        ) + "\n"
+        for count in (0, 1, 2, 3, 7):
+            with self.subTest(warmup_generations=count):
+                values = profile_values(
+                    self.planned, self.records(),
+                    [warmup * count + self.logs()[0]], 12.0,
+                )
+                self.assertEqual(values, expected)
+
+    def test_readiness_boundary_is_required_and_unique(self):
+        log = self.logs()[0]
+        for logs in ([log.split("\n", 1)[1]], [log, log.split("\n", 1)[0]]):
+            with self.subTest(logs=logs), self.assertRaisesRegex(ValueError, "readiness"):
+                profile_values(self.planned, self.records(), logs, 1.0)
+
+    def test_extra_or_missing_post_readiness_generation_still_fails(self):
+        log = self.logs()[0]
+        lines = log.splitlines()
+        for changed in (lines[:-1], lines + lines[-1:]):
+            with self.subTest(lines=changed), self.assertRaisesRegex(ValueError, "count"):
+                profile_values(self.planned, self.records(), ["\n".join(changed)], 1.0)
 
     def test_missing_invalid_or_negative_phase_fails_instead_of_inventing_zero(self):
         for value in (None, -1.0, True, "2", math.inf):
