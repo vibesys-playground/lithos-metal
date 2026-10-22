@@ -8,7 +8,13 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "benchmark"))
-from profile_metrics import PHASES, ProfileWriter, profile_values, synthetic_profile
+from profile_metrics import (
+    PHASES,
+    PREFLIGHT_GENERATIONS,
+    ProfileWriter,
+    profile_values,
+    synthetic_profile,
+)
 
 
 class ProfileTests(unittest.TestCase):
@@ -26,11 +32,11 @@ class ProfileTests(unittest.TestCase):
                 "INFO:monolith.serve:Generation: "
                 + repr(
                     {
-                        **{name: float(n + 1) for name in PHASES.values()},
+                        **{name: value for name in PHASES.values()},
                         **changes,
                     }
                 )
-                for n in range(2)
+                for value in [1000.0] * PREFLIGHT_GENERATIONS + [1.0, 2.0]
             )
         ]
 

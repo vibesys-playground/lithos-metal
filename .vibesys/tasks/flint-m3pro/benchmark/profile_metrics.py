@@ -12,6 +12,11 @@ from pathlib import Path
 
 from vs_protocol import ResultWriter
 
+# Pinned RF 89dce4a sends exactly two cache-check completions before opening its
+# workload log (src/backend/preflight.rs). Keep these as startup diagnostics and
+# require the exact count; never silently assign a probe to a workload request.
+PREFLIGHT_GENERATIONS = 2
+
 PHASES = {
     "prefill_timing": "prefill_wall_ms",
     "decode_timing": "decode_wall_ms",
@@ -49,10 +54,13 @@ def profile_values(planned, records, server_logs, startup_seconds):
         for line in log.splitlines():
             if "Generation: " in line:
                 generations.append(ast.literal_eval(line.split("Generation: ", 1)[1]))
-    if len(generations) != len(expected):
+    if len(generations) != len(expected) + PREFLIGHT_GENERATIONS:
         raise ValueError("Native generation count differs from completed quick requests")
     values = {"startup_duration_s": _number(startup_seconds, "startup_duration_s")}
-    for index, phases in enumerate(generations):
+    for index, phases in enumerate(generations[:PREFLIGHT_GENERATIONS]):
+        for field, native in PHASES.items():
+            values[f"preflight_{index}.{field}"] = _number(phases.get(native), native)
+    for index, phases in enumerate(generations[PREFLIGHT_GENERATIONS:]):
         for field, native in PHASES.items():
             value = _number(phases.get(native), native)
             values[f"request_{index}.{field}"] = value
@@ -102,8 +110,15 @@ def synthetic_profile(planned):
     logs = [
         "\n".join(
             "INFO:monolith.serve:Generation: "
-            + repr({native: float(index + 1) for native in PHASES.values()})
-            for index, _ in enumerate(planned)
+            + repr(
+                {
+                    native: float(index - PREFLIGHT_GENERATIONS + 1)
+                    if index >= PREFLIGHT_GENERATIONS
+                    else 0.0
+                    for native in PHASES.values()
+                }
+            )
+            for index, _ in enumerate([None] * PREFLIGHT_GENERATIONS + planned)
         )
     ]
     return profile_values(planned, records, logs, 0.0)
