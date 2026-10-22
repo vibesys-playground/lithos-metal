@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -239,6 +240,34 @@ class TaskEnvTests(unittest.TestCase):
         self.assertIn("'cmake'", text)
         self.assertIn("/env/bin/cmake", text)
         self.assertIn("uv sync --locked", text)
+
+    def test_ambient_python_imports_the_benchmark_without_task_modules(self):
+        # macOS /usr/bin/python3 is 3.9 and raises TypeError while importing
+        # budget.py (`X | None`). The benchmark must not load those modules
+        # until main, which runs only after the task interpreter switch.
+        benchmark = Path(__file__).resolve().parents[1] / "benchmark"
+        program = (
+            "import sys\n"
+            "sys.path.insert(0, sys.argv[1])\n"
+            "import run\n"
+            "loaded = [name for name in "
+            "('budget', 'launcher', 'replay_metrics', 'vs_protocol', 'task_env') "
+            "if name in sys.modules]\n"
+            "if loaded:\n"
+            "    raise SystemExit('loaded before main: ' + ', '.join(loaded))\n"
+        )
+        completed = subprocess.run(
+            ["/usr/bin/python3", "-c", program, str(benchmark)],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        self.assertEqual(
+            completed.returncode,
+            0,
+            completed.stderr or completed.stdout,
+        )
 
 
 if __name__ == "__main__":

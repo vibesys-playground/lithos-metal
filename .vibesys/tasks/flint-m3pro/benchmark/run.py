@@ -15,16 +15,18 @@ import tempfile
 import time
 from pathlib import Path
 
-from budget import deadline_guard
-from launcher import model_path, server_endpoint
-from replay_metrics import BUDGET_SECONDS, replay_window, summarize
-from vs_protocol import ResultWriter
-
 STARTUP_SECONDS = 1800
 CONTEXT_LIMITS = {"quick": 2048, "full": 32768}
 
 
 def main():
+    # Local modules use 3.10 union syntax. Import them only after
+    # enter_task_environment has switched off the ambient interpreter.
+    from budget import deadline_guard
+    from launcher import model_path, server_endpoint
+    from replay_metrics import BUDGET_SECONDS, replay_window, summarize
+    from vs_protocol import ResultWriter
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--request-factory-engine", required=True)
     parser.add_argument("--vs-output", type=Path, required=True)
@@ -228,6 +230,9 @@ def main():
 
 
 if __name__ == "__main__":
+    # The request-factory adapter starts this file on its own interpreter.
+    # That interpreter can be older than the locked environment (macOS
+    # /usr/bin/python3 is 3.9). Switch before main imports the task modules.
     from task_env import enter_task_environment
 
     enter_task_environment()
