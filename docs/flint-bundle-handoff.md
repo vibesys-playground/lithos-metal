@@ -3,6 +3,40 @@
 Updated 2026-10-21 (America/Los_Angeles). No optimization agents have been
 launched. Accuracy qualification is still pending in the port workstream.
 
+## Enforced accuracy gate and starting eligibility
+
+**The current starting candidate fails the enforced gate. Neither task can
+start an optimization run from this input today.** Passing configuration
+preflight is not a passing accuracy result. The real RF measurements here are
+direct evaluator-adapter performance diagnostics, not framework-accepted
+baselines and not optimization runs.
+
+Both `flint-m3pro-quick` and `flint-m3pro` invoke the identical
+`.vibesys/tasks/flint-m3pro/accuracy_checker/checker.py` command under the GPU
+lock, with an 1800-second accuracy timeout. Both retain the schema's enforced
+`benchmark.requires_accuracy=true` default. The checker enforces:
+
+- The serving-source audit and pinned checkpoint/tokenizer/template provenance.
+- Four semantic probes: arithmetic, Python list length and two conversation
+  recall cases. Each asks for at most 64 tokens and checks its fixed regex.
+- Exactly four current reference pins: `port-1`, `port-2`, `code-0`, `code-1`.
+  Each requests exactly 32 greedy tokens and must match every raw token ID,
+  the 32-token usage count and the pinned visible text. Prompt token IDs must
+  match the pinned chat template. All four pins run twice, in forward and
+  reverse order, with no tolerance or short-output allowance.
+
+The latest recorded real check passed all four semantic probes and `port-1`,
+then failed `port-2` at zero-based token **22**, expected **3087**, actual
+**220**. No model arithmetic changed during this RF continuation. This exact
+pin failure therefore still blocks the starting candidate, even though the
+port is investigating it as a reference-noise-level winner change.
+
+The exact checker and reference pins are unchanged by this work. No threshold
+has been changed or loosened. The separate port workstream is freezing a
+teacher-forced gate and will supply a pinned threshold file later. That file
+has **not** been received or wired into either task; the teacher-forced gate
+is not the gate these tasks enforce today.
+
 ## Current integration
 
 The fork branch is `vibesys`. The inherited uncommitted RF migration was

@@ -5,7 +5,7 @@
   "pack_key": "65dcd02bfffafe7ef9c806b04a40f155ea4690d0111d77e03efff89a53c7ffe9",
   "accuracy": {
     "qualified": false,
-    "gate": "unchanged exact 32-token pins, two passes",
+    "gate": "shared source/provenance audit, four semantic regex probes, four exact 32-token pins in forward and reverse order",
     "semantic_probes_passed": 4,
     "pins_passed_before_failure": 1,
     "first_failure": {
@@ -14,7 +14,23 @@
       "expected_id": 3087,
       "actual_id": 220
     },
-    "port_final_gate_specification": "pending"
+    "port_final_gate_specification": "pending",
+    "checker": ".vibesys/tasks/flint-m3pro/accuracy_checker/checker.py",
+    "enforced_by_tasks": [
+      "flint-m3pro-quick",
+      "flint-m3pro"
+    ],
+    "pin_ids": [
+      "port-1",
+      "port-2",
+      "code-0",
+      "code-1"
+    ],
+    "pins_sha256": "1ae35efd7e440e758def3ffd71bc97fe917cdb94c8aa3a75b4e2f784b58fd5c6",
+    "benchmark_requires_accuracy": true,
+    "starting_candidate_passes_gate": false,
+    "optimization_run_can_start": false,
+    "teacher_forced_threshold_file_wired": false
   },
   "benchmark_runs": [
     {
