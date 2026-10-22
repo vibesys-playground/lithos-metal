@@ -59,8 +59,31 @@
         32000
       ],
       "output_tokens_per_turn": 64,
-      "status": "queued_under_shared_lock",
-      "command_deadline_s": 600
+      "status": "failed",
+      "command_deadline_s": 600,
+      "error": "TimeoutError: Whole benchmark exceeded 600 seconds",
+      "wall_duration_s": 606.050681083012,
+      "completed_turns": [
+        {
+          "repeat": 0,
+          "turn": 1,
+          "bucket": 0,
+          "target": 1024,
+          "prompt_tokens": 1024,
+          "completion_tokens": 64,
+          "ttft_s": 99.5050692090008,
+          "decode_tokens_per_second": 10.15654691538458,
+          "cached_tokens": null
+        }
+      ],
+      "incomplete_turn": 2,
+      "unreached_targets": [
+        32000
+      ],
+      "score_published": false,
+      "engine_commit": "4524c0e8f5ce481dfcc3c0937ebe8545100078a0",
+      "environment": "VibeSys worktree Python 3.12.2 with serving/build dependencies",
+      "process_cleanup": "owned server and benchmark processes exited; shared GPU lock released"
     }
   ]
 }

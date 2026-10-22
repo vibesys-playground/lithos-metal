@@ -1,12 +1,12 @@
 # Flint M3 Pro bundle operator handoff
 
 Operator evidence outside `.vibesys/tasks/flint-m3pro/`. No VibeSys optimization
-agents have been launched. Updated 2026-10-21; measurement is still in progress.
+agents have been launched. Updated 2026-10-21; the final port gate is still pending.
 
 ## Integration
 
 The bundle's fork branch is `vibesys`. The original bundle `37d1a9923e5f` now
-includes the port through `4b708f3` from `flint-model`. The port remains
+includes the port through `d229770` from `flint-model`. The port remains
 numerically unqualified; its current investigation and eventual gate belong to
 `docs/flint-port-handoff.md`. No accuracy threshold has been changed here.
 
@@ -76,7 +76,8 @@ last-response state is used.
   read-only reuse, one-extra eviction, builder failure and interrupted builds.
 - Capacity regression fails at `c8aa948` with insufficient context and passes
   at head; it compiles static/dynamic programs from a tiny 8-position pack for
-  32 positions and checks packed bytes remain unchanged.
+  32 and 32768 positions, checks actual rotary bindings target generated
+  buffers and verifies packed bytes remain unchanged.
 - Existing checker tests reject an injected wrong token even when the normal
   pins pass. No numerical threshold has been loosened.
 - Touched fork Python passes Ruff E9/F; new/task modules pass import checks.
@@ -116,11 +117,19 @@ and the lock was released. No score was published.
 
 The scored workload is now one repetition of three turns at **1024, 8192 and
 32000** tokens, still exactly 64 outputs each. Only repeats/turns were reduced;
-all context buckets remain, including the largest target. A full run of that
-minimum workload is queued, using the fresh VibeSys worktree's interpreter and
-its installed serving/build dependencies. The new 600-second command timer
+all context buckets remain, including the largest target. The full run of that
+minimum workload used the fresh VibeSys worktree's interpreter and installed
+serving/build dependencies. It timed out during the 8192-target second turn.
+The 32000-target third turn was not reached. Only the 1024-token first turn
+completed: TTFT **99.5051 s**, decode **10.1565 tok/s**, 64 output tokens.
+The deadline fired at 600 seconds; measured whole wall time including cleanup
+was **606.0507 s**. The official protocol contains hello plus error, no result.
+Both benchmark and owned server processes exited, releasing the GPU lock. The new 600-second command timer
 interrupts blocking startup and requests, unwinds through server cleanup, and
 writes an error row plus partial observations rather than a fabricated score.
+The minimum three-bucket workload still cannot produce a valid baseline within
+600 seconds. Further turn/repetition reductions would omit a required bucket;
+the baseline prefill path needs work before this task is optimization-ready.
 
 [Structured measurements](flint-bundle-measurements.json) records the completed
 turns, the over-budget reduced attempt and the current accuracy failure. No
@@ -137,9 +146,10 @@ target and draft call sites were swept. Read-only explicit selection was chosen
 over implicit cache fallback. Raw-ID callbacks were chosen over mutable
 backend diagnostics to keep request ownership clear.
 
-Finish reduced then full measurement, retaining all context buckets. If the
-whole benchmark exceeds 600 seconds, reduce repeats/turns and report the exact
-change, without dropping context buckets or disguising startup time. Fetch and
+Both requested measurements have run. The scored workload is already reduced
+to one turn in each of three retained buckets, and still times out. Fix or
+optimize native prefill before retrying the full benchmark; do not drop a bucket,
+hide startup work or publish partial observations as a score. Fetch and
 merge `flint-model` again when it advances. When its handoff publishes the
 accuracy gate, implement that exact specification in the immutable checker,
 including an injected-bug rejection test, then rerun under the lock. Advance
