@@ -26,14 +26,34 @@ def main():
     from launcher import model_path, server_endpoint
     from replay_metrics import BUDGET_SECONDS, replay_window, summarize
     from vs_protocol import ResultWriter
+    from profile_metrics import ProfileWriter, profile_values, synthetic_profile
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--request-factory-engine", required=True)
     parser.add_argument("--vs-output", type=Path, required=True)
     parser.add_argument("--output-json", type=Path)
     parser.add_argument("--workload", choices=tuple(CONTEXT_LIMITS), default="full")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Synthetic profile only; no server, model, engine, or GPU lock",
+    )
+    parser.add_argument(
+        "--profile", action="store_true", help="Capture native per-request phase timings"
+    )
     parser.add_argument("--gpu-lock-held", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
+    if args.dry_run:
+        if not args.profile or args.workload != "quick":
+            parser.error("--dry-run requires --profile --workload quick")
+        with Path(__file__).with_name("quick.csv").open() as trace:
+            planned = list(csv.DictReader(trace))
+        writer = ProfileWriter(args.vs_output)
+        try:
+            writer.result(synthetic_profile(planned))
+        finally:
+            writer.close()
+        return 0
     if not args.gpu_lock_held:
         os.execv(
             "/usr/bin/lockf",
@@ -49,7 +69,8 @@ def main():
         )
     root = Path(__file__).resolve().parent
     output = args.output_json or Path(str(args.vs_output) + ".metrics.json")
-    writer = ResultWriter(args.vs_output)
+    writer = ProfileWriter(args.vs_output) if args.profile else ResultWriter(args.vs_output)
+    server_logs = [] if args.profile else None
     started = time.monotonic()
     started_timestamp = time.time()
     rf = None
@@ -82,7 +103,9 @@ def main():
             with deadline_guard(STARTUP_SECONDS):
                 path = model_path()
                 url = owner.enter_context(
-                    server_endpoint(Path.cwd(), path, max_context=max_context)
+                    server_endpoint(
+                        Path.cwd(), path, max_context=max_context, server_logs=server_logs
+                    )
                 )
                 command = [
                     args.request_factory_engine,
@@ -123,9 +146,7 @@ def main():
                     "--summary-path",
                     str(summary),
                 ]
-                rf = subprocess.Popen(
-                    command, stdout=terminal, stderr=subprocess.STDOUT
-                )
+                rf = subprocess.Popen(command, stdout=terminal, stderr=subprocess.STDOUT)
                 # The writer starts after RF's mandatory cache probe. Its file
                 # birth time provides a watchdog boundary; final scoring uses
                 # RF's own first-submit timestamp to remove scheduling skew.
@@ -143,9 +164,7 @@ def main():
             deadline_timestamp = replay_started + BUDGET_SECONDS
             remaining = max(0, deadline_timestamp - time.time())
             print(
-                json.dumps(
-                    {"startup_duration_s": startup, "scored_budget_s": BUDGET_SECONDS}
-                ),
+                json.dumps({"startup_duration_s": startup, "scored_budget_s": BUDGET_SECONDS}),
                 flush=True,
             )
             timed_out = False
@@ -198,6 +217,9 @@ def main():
         # Publish only after the owned server exits, so whole wall time includes
         # cleanup on both completed and timed-out paths.
         result["total_wall_duration_s"] = time.monotonic() - started
+        if args.profile:
+            values = profile_values(planned, records, server_logs, startup)
+            result["profile_metrics"] = values
         output.write_text(json.dumps(result, indent=2, allow_nan=False) + "\n")
         writer.result(values)
         print(json.dumps(result, allow_nan=False), flush=True)
@@ -235,5 +257,6 @@ if __name__ == "__main__":
     # /usr/bin/python3 is 3.9). Switch before main imports the task modules.
     from task_env import enter_task_environment
 
-    enter_task_environment()
+    if "--dry-run" not in sys.argv:
+        enter_task_environment()
     raise SystemExit(main())

@@ -40,9 +40,7 @@ def model_path() -> Path:
     cached = Path(snapshot_download(MODEL, revision=REVISION, local_files_only=True))
     path = Path(os.environ.get("FLINT_MODEL_PATH", cached)).expanduser().resolve()
     manifest = json.loads(
-        (
-            Path(__file__).resolve().parents[1] / "reference" / "checkpoint.json"
-        ).read_text()
+        (Path(__file__).resolve().parents[1] / "reference" / "checkpoint.json").read_text()
     )
     # Cache-only resolution above never downloads a second copy. A supplied
     # path must use these exact cached bytes, including tokenizer/template.
@@ -50,9 +48,7 @@ def model_path() -> Path:
         if Path(name).name != name or not (path / name).is_file():
             raise ValueError(f"Pinned checkpoint file missing: {name}")
         if not (path / name).samefile(cached / name):
-            raise ValueError(
-                f"FLINT_MODEL_PATH must reuse pinned HF cache files: {name}"
-            )
+            raise ValueError(f"FLINT_MODEL_PATH must reuse pinned HF cache files: {name}")
         with (path / name).open("rb") as source:
             digest = hashlib.file_digest(source, "sha256").hexdigest()
         if digest != manifest["checkpoint_files"][name]:
@@ -75,9 +71,7 @@ class PinnedTokenizer:
         from transformers import AutoTokenizer
 
         return cls(
-            AutoTokenizer.from_pretrained(
-                path, local_files_only=True, trust_remote_code=False
-            )
+            AutoTokenizer.from_pretrained(path, local_files_only=True, trust_remote_code=False)
         )
 
     def ids(self, messages: list[dict]) -> list[int]:
@@ -177,7 +171,9 @@ def launch_argv(
 
 
 @contextlib.contextmanager
-def server_endpoint(workspace: Path, path: Path, *, max_context: int = 32768):
+def server_endpoint(
+    workspace: Path, path: Path, *, max_context: int = 32768, server_logs: list[str] | None = None
+):
     """Own one server process group, including startup failure and caller failure.
 
     Startup compilation is included in whole benchmark wall time. Temporary log
@@ -223,9 +219,7 @@ def server_endpoint(workspace: Path, path: Path, *, max_context: int = 32768):
                             f"lithos-metal exited during startup ({proc.returncode})"
                         )
                     try:
-                        with urllib.request.urlopen(
-                            url + "/health", timeout=2
-                        ) as response:
+                        with urllib.request.urlopen(url + "/health", timeout=2) as response:
                             if response.status == 200:
                                 break
                     except (urllib.error.URLError, TimeoutError):
@@ -249,3 +243,6 @@ def server_endpoint(workspace: Path, path: Path, *, max_context: int = 32768):
                     with contextlib.suppress(ProcessLookupError):
                         os.killpg(proc.pid, signal.SIGKILL)
                     proc.wait(timeout=10)
+                if server_logs is not None:
+                    log.flush()
+                    server_logs.append(log_path.read_text())

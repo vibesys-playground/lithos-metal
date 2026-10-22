@@ -19,6 +19,12 @@ args = ["${PROJECT_ROOT}/.vibesys/tasks/flint-m3pro/benchmark/run.py"]
 timeout_seconds = 2500
 result_protocol = 2
 
+[profile]
+entrypoint = "request-factory-adapter"
+args = ["${PROJECT_ROOT}/.vibesys/tasks/flint-m3pro/benchmark/run.py", "--profile", "--workload", "quick"]
+timeout_seconds = 2500
+fields = ["prefill_timing", "decode_timing"]
+
 [catalogue]
 domain = "llm-serving"
 
