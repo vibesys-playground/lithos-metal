@@ -310,11 +310,76 @@ def test_continuation_accepts_only_a_margin_at_or_below_the_threshold():
     assert judge_continuation(4, None, 0.2).code == "non_finite"
 
 
+def test_frozen_gate_rejects_the_recorded_no_sink_magnitude():
+    gate = load_gate("tools/goldens/gate/flint_gate_v1.json")
+    assert "qualified" not in gate
+    assert len(gate["family"]) == 31
+    assert all(
+        "native" not in item["id"] and "sink" not in item["id"]
+        for item in gate["family"]
+    )
+    assert len(gate["suite_limits"]) == len(expected_tensors())
+    for metrics in gate["suite_limits"].values():
+        for entry in metrics.values():
+            assert entry["deviation"] >= 0
+            assert entry["threshold"] == pytest.approx(2 * entry["deviation"])
+    margin = gate["stable_margin"]
+    assert margin["threshold"] == pytest.approx(
+        min(
+            2 * margin["winner_change_margin"]["deviation"],
+            2 * margin["top2_gap_error"]["deviation"],
+        )
+    )
+    observed = gate["no_sink_mutation"]["logits"]["max_abs"]
+    assert gate["no_sink_mutation"]["passed"] is False
+    assert observed > gate["suite_limits"]["logits"]["max_abs"]["threshold"]
+
+    ids = pinned_input_ids(gate, 0)
+    assert len(ids) == 76
+    native, reference = _full_traces(len(ids))
+    matched = evaluate_traces(
+        native,
+        reference,
+        gate,
+        example=0,
+        token_ids=ids,
+        identities=gate["identities"],
+    )
+    assert matched.passed
+    native["logits"] = reference["logits"].copy()
+    native["logits"][:, 0] += np.float32(observed)
+    rejected = evaluate_traces(
+        native,
+        reference,
+        gate,
+        example=0,
+        token_ids=ids,
+        identities=gate["identities"],
+    )
+    assert not rejected.passed
+    assert ("metric", "logits") in _codes(rejected)
+
+
 def test_load_gate_rejects_a_missing_contract_key(tmp_path):
     path = tmp_path / "gate.json"
     path.write_text(json.dumps({"schema_version": 1}))
     with pytest.raises(GateError):
         load_gate(path)
+
+
+def _full_traces(rows):
+    native = {}
+    reference = {}
+    for name, (kind, width) in expected_tensors().items():
+        if kind == "routing":
+            ids = np.tile(np.arange(width, dtype=np.int32), (rows, 1))
+            reference[name] = ids
+            native[name] = ids.copy()
+        else:
+            values = np.ones((rows, width), np.float32)
+            reference[name] = values
+            native[name] = values.copy()
+    return native, reference
 
 
 def _records(abs_value):
