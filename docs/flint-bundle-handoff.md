@@ -47,7 +47,7 @@ bespoke `benchmark/core.py`, its streaming parser and workload-only tests were
 removed. Stale bespoke operator commands were removed from the task README.
 No inherited work was discarded without replacement or explanation.
 
-The branch includes `flint-model` through `7cfee21`. Its changes remain owned
+The branch includes `flint-model` through `b161786`. Its changes remain owned
 by the port workstream. This continuation changes no `monolith/` implementation
 and requires no additional serving API extension. Existing raw-token
 Completions and truthful prefix-cache telemetry support RF directly.

@@ -1,6 +1,23 @@
 # Flint port handoff
 
-## Continuation checkpoint — 2026-10-21 18:32 PDT
+## Sub-step plan — 2026-10-21 19:02 PDT
+
+The calibration rule in "Calibration rule (fixed before long-context native results)" and the checker contract below it stay fixed. Native measurements do not enter any threshold. The interrupted 16k FP32 comparison stays ineligible; it is rerun from an empty output directory, not resumed. Each GPU command takes `lockf -k /tmp/flint-gpu.lock` alone. Check `df -h ~` before each batch and stop writing if home has under 20 GiB free or `.agent-logs/` would pass 15 GiB. After a comparison, keep the compact JSON or JSONL summary and delete raw arrays no later step reads.
+
+Already eligible reference-only comparisons, kept as summaries: short examples 0, 1, and 2 at BF16 chunks 1 and 32 and FP32 chunk 32; example 0 BF16 chunks 2, 4, 8, and 16; long 1024 BF16 chunk 1 versus BF16 chunk 32; long 1024 and 4096 FP32 chunk 32 versus BF16 chunk 32. Free-running reference margins already kept: example 0 BF16 chunk 1 and FP32, example 1 BF16 chunk 1. Canonical short arrays and the 16k BF16 32-row archive stay until the comparisons that read them finish.
+
+1. This plan (now).
+2. About 25 minutes. One lock each: example 0 BF16 chunks 64 and 128, example 1 BF16 chunks 2 and 4. Compare with `--compare-to` against the retained canonical trace. Record wall time on the first command and use it to keep later steps inside their bounds. Write metrics only.
+3. About 25 minutes. Example 1 BF16 chunks 8, 16, 64, and 128, same way.
+4. About 25 minutes. Example 2 BF16 chunks 2, 4, 8, and 16.
+5. About 25 minutes. Example 2 BF16 chunks 64 and 128. Then reference-only free runs that feed the margin rule: example 1 FP32 and example 2 BF16 chunk 1.
+6. One command, which may run longer than 30 minutes: fresh FP32 32-row trace at 16384 positions compared with the retained BF16 32-row archive. Move the ineligible partial aside first. After `complete.json` exists and the row count is 16384 for every tensor, delete that archive. Then the last reference-only free run: example 2 FP32.
+7. About 25 minutes. Reduce every complete reference-only comparison with the fixed rule: for each scalar, twice the largest reference-to-reference deviation, per tensor, with per-length extrema and suite extrema both recorded. Freeze `tools/goldens/gate/flint_gate_v1.json` with the fixed prompt token IDs, every threshold and the measurement it came from, reference and weight and pack SHA-256 identities, and the injected no-sink result. No native number is an input.
+8. About 30 minutes. Add a checker that computes the metrics from native and reference traces and fails closed on missing rows, non-finite values, routing-cardinality changes, and shape or provenance mismatches. Hermetic tests cover those failures plus one pass and one fail. The stored no-sink trace must fail the frozen thresholds.
+9. About 30 minutes. Score native at 1024, 4096, and 16384, plus the short native comparisons and the three greedy continuations (example 1 and example 2 native free runs if they are not already stored). If whole-model and routing metrics pass and only a layer-local criterion fails, replay that block on the reference residual. A real defect gets a fix and a failing-before, passing-after regression. Thresholds stay frozen.
+10. Only if native qualifies: chat and tool serving smoke, then `tools/bench/flint_baseline.py` at about 1k decode, about 8k decode, and 8k prefill, three runs each, one GPU command per run.
+
+## Time-boxed continuation handoff — 2026-10-21 18:58 PDT
 
 **Still unqualified: the fixed reference calibration and final gate are incomplete.**
 Native teacher-forced comparisons are complete at 1024, 4096 and 16384 positions.
@@ -18,13 +35,13 @@ Do not start optimization from a claimed qualified baseline yet.
 No model arithmetic, kernel, recipe, fusion, prefill path or server-startup
 behavior changed in this continuation. The later startup/prefill priority was
 cancelled by the user; speed remains the optimization experiment's work.
-Serving smoke and the requested three-run timing measurements remain pending.
+Serving smoke and the requested three-run timing measurements were not run. No final numeric gate or qualified baseline is published.
 The earlier bundle-reported TTFT 99.5 s / decode 10.2 tok/s are not new
 measurements from this continuation.
 
 Remaining work, in order:
 
-1. Complete the queued FP32 16k reference comparison.
+1. Rerun the interrupted FP32 16k reference comparison to completion. Its partial metrics are not calibration-eligible.
 2. Complete the predeclared BF16 short arithmetic family: example 0 chunks
    64/128, and examples 1/2 chunks 2/4/8/16/64/128. Compare directly against each
    retained canonical trace using `--compare-to`; retain metrics, not raw arrays.
@@ -439,3 +456,80 @@ greedy_ids[:-1]`, lengths **76, 72, 81**. Long inputs repeat the second fixture'
 72 IDs, truncated to **1024, 4096, 16384**. No generated native ID enters these
 comparisons. This deterministic corpus is public qualification data; it is not a
 claim of accuracy over all inputs.
+
+### Checker data contract (final numeric limits still pending)
+
+The protected expected tensor set has **194** names: `embed_tokens.h`, `logits`,
+49 each of `layers.i.self_attn.h` / `layers.i.mlp.h`, and 47 each of
+`layers.i.mlp.router.gate.y` / `layers.i.mlp.ids` (layers 2 through 48). Widths
+are respectively 2048, 150144, 2048, 2048, 256 and 6. Every tensor needs exactly
+the protected input length; missing names/rows, non-finite values, duplicate or
+out-of-range expert IDs, or changed expert cardinality fail closed.
+
+For every position, compute full-vector maximum absolute error, relative
+`L2(native-reference) / max(L2(reference), 1e-30)`, and cosine distance `1-cos`.
+For every named numeric tensor, retain maximum, p99 (linear interpolation) and
+mean of the per-position absolute and relative errors, plus maximum and mean
+cosine distance. Here “mean absolute error” means the mean of **per-position
+maximum component errors**, not an average that dilutes error over the vocabulary.
+For each routing layer, use exact unordered set disagreement and mean
+`1 - intersection_size/6`, weighting positions equally across chunk boundaries.
+
+For each scalar independently, the fixed rule is **2 × the largest value from
+any complete predeclared reference-only comparison**, pooled over the declared
+lengths/configurations, separately for each tensor. Never pool layers to hide a
+failing layer, average away a failing metric, or discard a prompt/outlier. The
+margin rule is **min(2 × largest reference winner-change margin, 2 × largest
+reference top-two-gap error)**, including the measured first-divergence margins
+of reference-only free-running alternatives. Require native top-1 equality at
+every position whose reference margin is strictly above that frozen threshold.
+
+Run all three 64-token native greedy continuations. The first different token,
+if any, must itself have a committed reference margin at or below the threshold;
+matching a previous ambiguous position does not excuse a later stable error.
+Later free-running tokens follow a different history, while the teacher-forced
+checks continue to compare identical prefixes at every position.
+
+Copy the final numeric limits, expected IDs/shapes, reference source and semantic
+leaf checks into bundle-owned protected data and pin their hashes. The candidate
+must neither choose the reference configurations nor supply thresholds or a
+trusted `qualified` flag. Candidate checking and timing must use the same actual
+arithmetic path; diagnostic copies may preserve intermediates, but the checker
+must not select an accuracy-only fallback. The same frozen limits must reject
+the measured whole-model no-sink mutation, alongside the independent strict
+2-ULP window/sink/no-RoPE leaf contracts.
+
+[The complete error trajectory at the reported divergence prefix](flint-divergence-prefix.json)
+localizes the largest stage-to-stage gain at **layer 20 MoE MLP**: relative L2
+rises about **4.074×**, reaching **0.0605904** natively; reference-only arithmetic
+changes reach **0.0609752** at that same tensor and position. Layer 46 MLP later
+reaches **0.0637177** native versus **0.0644898** reference-only. These measured
+amplifications support numerical noise for the original short index-48 mismatch;
+they do not waive the separate unresolved long-context cosine criterion. No
+model arithmetic fix is justified by the reported short-prefix difference.
+
+### Final stop and verification
+
+The three-hour wall-clock box ended with the port **unqualified**. The 16k FP32
+reference command waited approximately 45 minutes for the shared GPU and
+acquired it during cleanup; it was interrupted, with no completion marker. Its
+partial JSON is explicitly ineligible for calibration. All native long traces
+are complete, but only **16/31** declared reference-only pairwise comparisons
+and **4/9** planned free-running measurements are complete. No missing result or
+final threshold was invented. The full reference family, final frozen numeric
+limits, serving chat/tool smoke, and three-run 1k/8k baseline remain outstanding.
+
+The short divergence is consistent with measured numerical noise: against the
+same canonical trace, native logit maximum error / relative L2 are **2.0 /
+0.0206952**, versus **2.5 / 0.0308360** from reference BF16 ordering alone. This
+is evidence about that reported near-tie, not a claim that the unresolved
+long-context cosine criterion passes. No model arithmetic was changed.
+
+Verification: **65** attention/boundary/MoE/decode-state cases passed with Metal
+shader validation; **2** dirty-reference CLI regression cases pass now and fail
+against the pre-fix script. Changed Python files pass Ruff lint/format checks,
+and repository hygiene passes. The shared pack manifest remains
+`b01450fe47e91296e7cb7a57f94f795914d954ecbeec4188c9393d28cd0c390c`.
+All owned model processes and lock waiters were stopped, with no lock retained.
+Logs are approximately **8.25 GiB**; only raw canonical/16k reference arrays with
+planned future readers remain. The final reply records the pushed HEAD and date.
