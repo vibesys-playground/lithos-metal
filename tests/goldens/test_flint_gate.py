@@ -216,6 +216,27 @@ def test_record_coverage_gaps_overlaps_and_non_finite_values_fail():
     assert aggregate_records(poisoned, rows=ROWS).failures[0].code == "non_finite"
 
 
+def test_omitted_routing_rows_use_the_sibling_chunk_and_a_gap_fails():
+    inferred = _records(abs_value=0)
+    for record in inferred:
+        if record["name"].endswith(".ids"):
+            del record["rows"]
+    measurement = aggregate_records(inferred, rows=ROWS)
+    assert measurement.failures == ()
+    assert measurement.summaries["layers.2.mlp.ids"]["set_disagreement"] == 0
+
+    orphaned = _records(abs_value=0)
+    orphaned.append(
+        {
+            "name": "layers.2.mlp.ids",
+            "position": 99,
+            "set_agreement": 1.0,
+            "expert_overlap": 1.0,
+        }
+    )
+    assert aggregate_records(orphaned, rows=ROWS).failures[0].code == "missing_rows"
+
+
 def test_routing_rates_are_weighted_by_rows_and_p99_uses_linear_interpolation():
     records = _records(abs_value=0)
     records = [record for record in records if record["name"] != "layers.2.mlp.ids"]

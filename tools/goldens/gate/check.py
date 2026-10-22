@@ -219,6 +219,7 @@ def aggregate_records(records: Iterable[Mapping], *, rows: int) -> _Measurement:
     routing: dict[str, list[tuple[int, int, float, float]]] = {
         name: [] for name in routing_names
     }
+    unresolved_routing: list[tuple[str, int, float, float]] = []
     logit_parts: list[tuple[int, np.ndarray, np.ndarray, float, float, float]] = []
     failures: list[Failure] = []
     for record in records:
@@ -229,7 +230,7 @@ def aggregate_records(records: Iterable[Mapping], *, rows: int) -> _Measurement:
         position = int(record.get("position", 0))
         kind, _width = spec[name]
         if kind == "routing":
-            failure = _take_routing(record, name, position, routing)
+            failure = _take_routing(record, name, position, routing, unresolved_routing)
             if failure:
                 failures.append(failure)
             continue
@@ -243,6 +244,8 @@ def aggregate_records(records: Iterable[Mapping], *, rows: int) -> _Measurement:
                 failures.append(logit)
             else:
                 logit_parts.append(logit)
+    if not failures:
+        failures.extend(_bind_routing_rows(pieces, routing, unresolved_routing))
     if failures:
         return _Measurement(tuple(failures), {}, None, None)
     summaries: dict[str, dict[str, float]] = {}
@@ -648,18 +651,52 @@ def _take_routing(
     name: str,
     position: int,
     routing: dict[str, list[tuple[int, int, float, float]]],
+    unresolved: list[tuple[str, int, float, float]],
 ) -> Failure | None:
-    rows = record.get("rows")
     agreement = record.get("set_agreement")
     overlap = record.get("expert_overlap")
-    if rows is None or agreement is None or overlap is None:
+    if agreement is None or overlap is None:
         return Failure("missing_rows", name, "routing record is incomplete")
     if not np.isfinite(agreement) or not np.isfinite(overlap):
         return Failure("non_finite", name)
     if not 0 <= float(agreement) <= 1 or not 0 <= float(overlap) <= 1:
         return Failure("routing_cardinality", name, "agreement outside [0, 1]")
-    routing[name].append((position, int(rows), float(agreement), float(overlap)))
+    if record.get("rows") is None:
+        # Older chunk logs omit the count. The sibling numeric chunk has it.
+        unresolved.append((name, position, float(agreement), float(overlap)))
+        return None
+    routing[name].append(
+        (position, int(record["rows"]), float(agreement), float(overlap))
+    )
     return None
+
+
+def _bind_routing_rows(pieces, routing, unresolved) -> list[Failure]:
+    """Fill omitted routing row counts from the numeric chunk at the same position."""
+
+    lengths: dict[int, int] = {}
+    failures: list[Failure] = []
+    for chunks in pieces.values():
+        for position, absolute, _relative, _cosine in chunks:
+            count = len(absolute)
+            previous = lengths.get(position)
+            if previous is not None and previous != count:
+                failures.append(
+                    Failure(
+                        "missing_rows", "*", f"position {position} row counts disagree"
+                    )
+                )
+            else:
+                lengths[position] = count
+    for name, position, agreement, overlap in unresolved:
+        count = lengths.get(position)
+        if count is None:
+            failures.append(
+                Failure("missing_rows", name, "routing chunk has no measured row count")
+            )
+            continue
+        routing[name].append((position, count, agreement, overlap))
+    return failures
 
 
 def _take_numeric(
