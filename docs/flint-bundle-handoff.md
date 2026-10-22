@@ -285,13 +285,45 @@ is only for that internal re-exec. Each evaluator owns a fresh server process
 group, terminates it on every exit path and releases the lock on completion.
 Unrelated reference processes are never stopped by this task.
 
-A source-build Python environment needs CMake, nanobind and the serving
-extras. The native extension is built in the evaluated candidate checkout.
-An initial attempt using the VibeSys environment failed before model startup:
-`transformers 5.20.2` expected a Hub API absent from the VibeSys-locked
-`huggingface_hub 1.10.2`. The VibeSys environment now has compatible
-`transformers 5.5.4`, verified after `uv run` synchronizes dependencies.
-The dedicated lithos source environment remains usable independently.
+The task environment is the host equivalent of a task image. Docker cannot
+reach Metal on macOS, and VibeSys has no Python-environment hook: `[build]`
+runs inside the ambient run environment, and `[environment]` only selects
+Modal or docker-in-docker. Accuracy and the benchmark therefore enter an
+environment built from the candidate's own `uv.lock`.
+
+`./.vibesys/tasks/flint-m3pro/setup_env.sh` is the one setup command. It runs
+`check_host.sh` first, then `uv sync --locked --extra serve
+--no-install-project --python 3.12` into
+`$HOME/.cache/lithos-metal/task-env/<sha256 of uv.lock>`. The interpreter is
+that directory's `bin/python`. CMake is `bin/cmake` beside it. Task commands
+invoke those paths. They do not use the VibeSys virtualenv or PATH. An
+unchanged lock reuses the directory. A dependency change must be committed in
+`uv.lock`. `--locked` fails with a message that says so, and does not update
+the lock or resolve new dependencies. `uv sync --frozen` is not used: uv 0.8
+rejects combining it with `--locked`, and `--frozen` alone installs a stale
+lock without failing. Weights and the shared pack stay in their own caches
+and are not installed into this environment. The native extension is still
+compiled into the candidate checkout. A prebuilt extension from another
+checkout is not a substitute.
+
+`check_host.sh` is a standalone script. It checks the Xcode command line
+tools, the Metal toolchain, macOS 26 or newer, the pinned weight snapshot, and
+the shared pack. It prints each missing item and how to fix it, then exits
+nonzero. Setup, accuracy, and the benchmark all run it before measuring.
+`xcrun -f metal` is accepted when it prints a compiler. The Command Line
+Tools on this host do not ship that shader compiler. The native target does
+not invoke it: it compiles with `xcrun -f clang` and links `-framework Metal`,
+so the check passes when those two are present.
+
+macOS Seatbelt allows the agent to read and execute that cache: reads are
+broad, `process-exec` and `file-map-executable` are allowed, and a candidate
+worktree's two denied ancestors sit inside the project, not over
+`$HOME/.cache`. Writes are denied outside the worktree, so `uv sync` cannot
+create or refresh the cache from inside the agent confinement. That needs a
+VibeSys write allowance for `$HOME/.cache/lithos-metal/task-env` and
+`$HOME/.cache/uv`. No allowance was added. The evaluator command is separate
+and can create the environment; after it exists the agent can read and
+execute it.
 
 To reproduce via the existing evaluator package, let `RF_ADAPTER` point to
 its installed `adapter.py` and `RF_ENGINE` to its pinned tool binary:

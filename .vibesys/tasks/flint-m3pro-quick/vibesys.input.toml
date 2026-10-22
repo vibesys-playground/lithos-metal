@@ -6,7 +6,7 @@ domain = "llm-serving"
 interface = "service"
 
 [accuracy]
-command = ["lockf", "-k", "/tmp/flint-gpu.lock", "python3", "${PROJECT_ROOT}/.vibesys/tasks/flint-m3pro/accuracy_checker/checker.py"]
+command = ["/bin/sh", "${PROJECT_ROOT}/.vibesys/tasks/flint-m3pro/setup_env.sh", "accuracy"]
 timeout_seconds = 1800
 
 [evaluator]

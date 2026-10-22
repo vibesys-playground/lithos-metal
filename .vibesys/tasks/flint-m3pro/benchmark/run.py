@@ -33,10 +33,10 @@ def main():
     parser.add_argument("--gpu-lock-held", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
     if not args.gpu_lock_held:
-        os.execvp(
-            "lockf",
+        os.execv(
+            "/usr/bin/lockf",
             [
-                "lockf",
+                "/usr/bin/lockf",
                 "-k",
                 "/tmp/flint-gpu.lock",
                 sys.executable,
@@ -228,4 +228,7 @@ def main():
 
 
 if __name__ == "__main__":
+    from task_env import enter_task_environment
+
+    enter_task_environment()
     raise SystemExit(main())

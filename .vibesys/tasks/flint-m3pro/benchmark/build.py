@@ -1,43 +1,36 @@
 #!/usr/bin/env python3
-"""Build this measured checkout's native runtime, without installing another tree.
+"""Build this measured checkout's native runtime with the locked environment's cmake.
 
-VibeSys runs this candidate build before the trusted checker/measurement.
-CMake emits the extension into monolith/runtime. No GPU work is executed.
+The executable is that environment's cmake, never a PATH lookup. The extension
+is written into this checkout. A prebuilt extension from another checkout is
+not used.
 """
 
 from __future__ import annotations
 
 import subprocess
 import sys
+from pathlib import Path
+
+from task_env import (
+    TaskEnvironmentError,
+    load_prepared,
+    native_build_commands,
+    project_root,
+    require_current_interpreter,
+)
 
 
 def main() -> None:
-    subprocess.run(
-        [
-            "cmake",
-            "-S",
-            ".",
-            "-B",
-            "build/flint-task",
-            "-DCMAKE_BUILD_TYPE=Release",
-            f"-DPython_EXECUTABLE={sys.executable}",
-        ],
-        check=True,
-        timeout=120,
-    )
-    subprocess.run(
-        [
-            "cmake",
-            "--build",
-            "build/flint-task",
-            "--config",
-            "Release",
-            "--parallel",
-            "2",
-        ],
-        check=True,
-        timeout=300,
-    )
+    project = project_root()
+    try:
+        prepared = load_prepared(project, Path.home())
+        require_current_interpreter(Path(sys.executable), prepared)
+    except TaskEnvironmentError as exc:
+        raise SystemExit(str(exc)) from exc
+    configure, compile_command = native_build_commands(project, prepared)
+    subprocess.run(configure, check=True, timeout=120, cwd=project)
+    subprocess.run(compile_command, check=True, timeout=300, cwd=project)
 
 
 if __name__ == "__main__":

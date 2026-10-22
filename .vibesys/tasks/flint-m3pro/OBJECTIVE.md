@@ -111,11 +111,12 @@ the two tasks are different experiments and must not be compared directly.
 
 ## Candidate contract
 
-The trusted launcher starts from the candidate repository root. This example
-shows full/accuracy capacity; quick supplies `--max-context 2048`:
+The trusted launcher starts from the candidate repository root. `$TASK_PYTHON`
+is the interpreter printed by `.vibesys/tasks/flint-m3pro/setup_env.sh`. This
+example shows full/accuracy capacity; quick supplies `--max-context 2048`:
 
 ```sh
-python3 -m monolith.serve --model "$FLINT_MODEL_PATH" \
+"$TASK_PYTHON" -m monolith.serve --model "$FLINT_MODEL_PATH" \
   --revision 3b93f9053b530488405ae9fca51d4900d6ce21f0 \
   --local-files-only --no-draft --no-commute-norm --served-model-name flint \
   --pack "$FLINT_PACK_DIR" --pack-read-only \
@@ -166,13 +167,43 @@ Preserve these CLI options and the existing serving endpoints:
   exact token equality. The extension must report actual runtime outputs,
   never retokenized visible text.
 
-The evaluated launcher runs CMake in the measured checkout before starting
-the server, producing its native extension in `monolith/runtime`. There is
-no manifest `[build]` stage: host evaluation does not provide a confined build
-runner. A preinstalled extension from another checkout is not a substitute.
-Python, CMake and nanobind must be installed in the launch environment.
-Build failures invalidate measurement and build time is included in benchmark
-wall time.
+The agent and the evaluator use one environment, built from this candidate's
+`uv.lock`. Docker cannot reach Metal here, so that lockfile is the image.
+From the candidate repository root, the setup command is:
+
+```sh
+./.vibesys/tasks/flint-m3pro/setup_env.sh
+```
+
+It runs `.vibesys/tasks/flint-m3pro/check_host.sh` first, then
+`uv sync --locked --extra serve --no-install-project --python 3.12`
+into `$HOME/.cache/lithos-metal/task-env/<sha256 of uv.lock>`. The interpreter
+is `$HOME/.cache/lithos-metal/task-env/<sha256 of uv.lock>/bin/python`, and
+cmake is `bin/cmake` beside it. `setup_env.sh` prints the interpreter path.
+Build and test with that interpreter only. Do not use the VibeSys environment
+or `cmake` from `PATH`.
+
+`check_host.sh` also runs before accuracy and before the benchmark. It checks
+the Xcode command line tools, the Metal toolchain (`xcrun -f metal`, or
+`xcrun -f clang` plus `Metal.framework` when the command line tools do not
+ship the metal shader compiler), macOS 26 or newer, the pinned weight
+snapshot, and the shared pack. It prints each missing item and how to fix it,
+then exits nonzero.
+
+If you add or change a dependency, run `uv lock` and commit `uv.lock`.
+`uv sync --locked` fails until that lock is committed and does not resolve
+new dependencies. `uv sync --frozen` is not the setup command: on uv 0.8 it
+installs a stale lock without failing. An unchanged lock reuses the cached
+environment. Weights stay
+in the Hugging Face cache and the shared pack stays at its documented
+directory. Neither is installed into this environment or copied into the
+candidate checkout.
+
+The launcher still builds this checkout's native extension into
+`monolith/runtime` with that environment's cmake and Python. A preinstalled
+extension from another checkout is not a substitute. There is no manifest
+`[build]` stage. Build failures invalidate measurement, and build time is
+included in benchmark wall time.
 
 A server is owned and stopped by each evaluator, including startup and
 measurement failures. Startup does not use another installed lithos-metal
