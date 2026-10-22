@@ -12,7 +12,7 @@ bespoke `benchmark/core.py`, its streaming parser and workload-only tests were
 removed. Stale bespoke operator commands were removed from the task README.
 No inherited work was discarded without replacement or explanation.
 
-The branch includes `flint-model` through `8ebfc3e`. Its changes remain owned
+The branch includes `flint-model` through `7cfee21`. Its changes remain owned
 by the port workstream. This continuation changes no `monolith/` implementation
 and requires no additional serving API extension. Existing raw-token
 Completions and truthful prefix-cache telemetry support RF directly.
@@ -134,6 +134,26 @@ sidecar preserves every planned outcome, RF's raw records, full summary and
 input identity, including planned and measured prefix-cache statistics.
 Accuracy remains an independent hard gate.
 
+## Real RF full measurement
+
+Full replay at candidate `d214519` reached RF preparation and passed the
+mandatory cache probe. Startup took **1622.2421 seconds**. The fixed scored
+window expired at **600 seconds** while the first 14438-token request was
+still prefilling. No trace request completed. RF flushed its own error outcome
+and summary after owned-server shutdown.
+
+The valid protocol-v2 row reports **0 completed / 7 timed out**,
+`ttft_ms_avg=600000`, `tpot_ms_avg=600000`, and
+`decode_tokens_per_second=0`. These are explicitly censored values, not
+observed latency or decode rates. Whole wall time, including cleanup, was
+**2237.4668 seconds** (37.29 minutes), excluding the GPU lock queue. The real
+VibeSys protocol parser accepts this result without a failure.
+
+The full runtime and trace configuration is unchanged by the later quick-only
+capacity retuning. RF, benchmark and server processes exited, releasing their
+lock. The revised quick command acquired it next. This measurement provides
+performance diagnostics; it does not override the failing accuracy gate.
+
 ## Pack, engine and process policy
 
 Use only the existing shared pack, read-only, resolved by `FLINT_PACK_DIR`
@@ -183,7 +203,8 @@ Fakes and temporary files; no sleeps or real model execution.
 
 VibeSys format and lint scripts pass. Both tasks pass `vibesys validate`,
 all six selected external-example registry checks pass, and fork hygiene plus
-Ruff E9/F/I pass for the changed task modules.
+Ruff E9/F/I pass for the changed task modules. The two newly merged reference
+provenance tests also pass without importing a real model.
 
 Both requested preflights pass with `settings.valid=true`, `uses_docker=false`,
 backend `metal`, an available evaluator and all six dynamic roles:
@@ -210,7 +231,7 @@ received 220. No threshold was loosened. The port's long-context frozen gate
 is still pending; performance diagnostics alone do not qualify a candidate.
 
 [Structured measurements](flint-bundle-measurements.json) retain historical
-observations and RF results as they complete. Finish both real RF runs, merge
+observations and RF results as they complete. Finish the revised quick measurement, merge
 new port commits when published, then advance the VibeSys submodule pointer
 and merge/push the experiment normally. Do not launch optimization agents
 until the independent accuracy gate qualifies the port.
