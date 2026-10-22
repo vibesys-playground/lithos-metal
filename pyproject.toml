@@ -9,7 +9,14 @@ description = "lithos-metal: local LLM inference on Apple silicon."
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.10"
-dependencies = ["numpy>=1.26"]
+dependencies = [
+  "numpy>=1.26",
+  # Installed into the task environment. Build-system requires alone never
+  # land in that environment, so a later sync of another project cannot
+  # remove the cmake the candidate build invokes.
+  "cmake>=3.24; sys_platform == 'darwin'",
+  "nanobind>=2; sys_platform == 'darwin'",
+]
 
 [project.urls]
 Homepage = "https://github.com/lithos-ai/lithos-metal"
