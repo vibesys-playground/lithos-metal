@@ -82,6 +82,9 @@ Both use `text-generation-session-execution-v2`, saturated arrival,
 reuse. Every `tool_wait_after_ms` is zero: tool time is compressed so the next
 round starts immediately after its predecessor. No concurrent users are added.
 RF's mandatory cache-telemetry probe runs before scored replay.
+Quick uses a 1024-token pool to bound that probe. The probe covers this small
+pool and can warm the first trace prompt; planned and actual cache hit rates
+remain separate diagnostics. Later rounds still add uncached tokens.
 
 The scored budget is 600 seconds, after startup and RF preparation. Every
 planned round remains in the denominator. Requests missing at the deadline,

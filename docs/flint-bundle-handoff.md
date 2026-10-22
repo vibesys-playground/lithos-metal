@@ -84,7 +84,10 @@ framing; the independent accuracy checker still verifies chat framing.
 The corpus has enough distinct source text for the full 65536-token pool.
 Quick caps its pool at 1024 tokens, covering its largest 800-token prompt.
 RF's mandatory cache probe is bounded by that pool, so quick does not pay an
-8192-token probe. Full retains RF's normal 8192-token probe. Neither probe is
+8192-token probe. With the small quick pool the probe covers the entire pool
+and can warm the first trace prompt, so quick is explicitly a warm bootstrap.
+Later rounds still append uncached tokens. Full retains RF's normal tail probe
+of 8192 tokens from its larger pool. Neither probe is
 scored, but both are included in startup and whole wall time.
 
 ## Metrics and fixed budget
