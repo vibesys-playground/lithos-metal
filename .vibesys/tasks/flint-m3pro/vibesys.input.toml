@@ -6,7 +6,7 @@ domain = "llm-serving"
 interface = "service"
 
 [accuracy]
-command = ["/bin/sh", "${PROJECT_ROOT}/.vibesys/tasks/flint-m3pro/setup_env.sh", "accuracy"]
+command = ["./.vibesys/tasks/flint-m3pro/setup_env.sh", "accuracy"]
 timeout_seconds = 1800
 
 [evaluator]

@@ -291,7 +291,9 @@ runs inside the ambient run environment, and `[environment]` only selects
 Modal or docker-in-docker. Accuracy and the benchmark therefore enter an
 environment built from the candidate's own `uv.lock`.
 
-`./.vibesys/tasks/flint-m3pro/setup_env.sh` is the one setup command. It runs
+`./.vibesys/tasks/flint-m3pro/setup_env.sh` is the one setup command, and it
+is the accuracy command in both task manifests. The executable has to be a
+path inside the project, so the command is not `/bin/sh`. It runs
 `check_host.sh` first, then `uv sync --locked --extra serve
 --no-install-project --python 3.12` into
 `$HOME/.cache/lithos-metal/task-env/<sha256 of uv.lock>`. The interpreter is
