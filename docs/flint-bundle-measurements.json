@@ -84,6 +84,175 @@
       "engine_commit": "4524c0e8f5ce481dfcc3c0937ebe8545100078a0",
       "environment": "VibeSys worktree Python 3.12.2 with serving/build dependencies",
       "process_cleanup": "owned server and benchmark processes exited; shared GPU lock released"
+    },
+    {
+      "id": "rf-quick-calibration-3x256-16-context32768",
+      "engine_commit": "d214519dd41adfe0fbafb7835ce13ec290c3164a",
+      "rf_commit": "89dce4a64ae12e7084fbe464ddda882fa0a4c482",
+      "rf_engine_sha256": "a24d8c85a1e106dbe186e119957744abc71edd8b5d76544787827e0a15c88774",
+      "trace_sha256": "60c890f520890c3ab0a8da3f5c273c52e5bdc8c2053f2e2bce3aa3188cd1f5b8",
+      "status": "completed_all_requests_superseded_for_cost",
+      "max_context": 32768,
+      "token_pool_limit": 1024,
+      "metrics": {
+        "ttft_ms_avg": 74113.15999999999,
+        "tpot_ms_avg": 324.9520000000003,
+        "decode_tokens_per_second": 6.756171856014462,
+        "completed_requests": 3,
+        "timed_out_requests": 0,
+        "startup_duration_s": 262.26914715766907,
+        "scored_duration_s": 238.64082312583923
+      },
+      "total_wall_duration_s": 501.28036462499585,
+      "wall_time_note": "Includes startup and owned-server cleanup; excludes GPU lock queue.",
+      "rf_summary": {
+        "workload": {
+          "kind": "sessions",
+          "sessions": 1,
+          "rounds": 3,
+          "first_context_overflow_round_idx": null,
+          "first_context_overflow_prompt_len": null,
+          "first_context_overflow_requested_total_len": null,
+          "max_prompt_len": 800,
+          "max_prefix_len": 544,
+          "max_input_len": 256,
+          "max_output_len": 16,
+          "total_output_len": 48,
+          "max_arrival_time_ms": 0.0,
+          "total_tool_wait_after_ms": 0.0
+        },
+        "replay": {
+          "kind": "sessions",
+          "common": {
+            "attempted_steps": 3,
+            "success_steps": 3,
+            "failed_steps": 0,
+            "target_output_tokens": 48,
+            "actual_output_tokens": 48,
+            "output_mismatch_steps": 0,
+            "output_token_delta": 0,
+            "total_duration_ms_sum": 237846.28999999998,
+            "total_duration_ms_avg": 79282.09666666666,
+            "total_duration_ms_p50": 60926.4,
+            "total_duration_ms_p90": 126755.376,
+            "total_duration_ms_max": 143212.62,
+            "ttft_ms_avg": 74113.15999999999,
+            "ttft_ms_p50": 58435.4,
+            "ttft_ms_p90": 117012.448,
+            "ttft_ms_max": 131656.71,
+            "ttft_token_id_steps": 3,
+            "ttft_text_fallback_steps": 0,
+            "run_duration_ms": 237848.1969833374,
+            "request_throughput_per_s": 0.012613086994349454,
+            "output_token_throughput_per_s": 0.20180939190959127,
+            "output_bytes": 239,
+            "output_byte_throughput_per_s": 1.0048425972165065,
+            "media_output_steps": 0,
+            "first_output_ms_avg": 74113.15999999999,
+            "first_output_ms_p50": 58435.4,
+            "first_output_ms_p90": 117012.448,
+            "first_output_ms_max": 131656.71,
+            "audio_duration_s": 0.0,
+            "audio_throughput_s_per_s": 0.0,
+            "real_time_factor_measured_steps": 0,
+            "real_time_factor_avg": null,
+            "real_time_factor_p50": null,
+            "real_time_factor_p90": null,
+            "real_time_factor_max": null,
+            "tpot_measured_steps": 3,
+            "tpot_ms_avg": 324.9520000000003,
+            "tpot_ms_p50": 133.5399999999999,
+            "tpot_ms_p90": 629.9154666666674,
+            "tpot_ms_max": 754.0093333333342,
+            "completion_amortized_tpot_measured_steps": 3,
+            "completion_amortized_tpot_ms_avg": 344.5957777777778,
+            "completion_amortized_tpot_ms_p50": 166.06666666666666,
+            "completion_amortized_tpot_ms_p90": 649.5285333333336,
+            "completion_amortized_tpot_ms_max": 770.3940000000002,
+            "context_overflow_steps": 0
+          },
+          "prefix_cache": {
+            "planned_prefix_tokens": 816,
+            "planned_prompt_tokens": 1584,
+            "planned_prefix_hit_rate": 0.5151515151515151,
+            "measured_cache_steps": 3,
+            "measured_server_cached_prompt_tokens": 782,
+            "measured_server_prompt_tokens": 1584,
+            "planned_prefix_tokens_for_measured_cache_steps": 816,
+            "planned_prompt_tokens_for_measured_cache_steps": 1584,
+            "planned_prefix_hit_rate_for_measured_cache_steps": 0.5151515151515151,
+            "server_prefix_hit_rate": 0.4936868686868687,
+            "server_prefix_hit_rate_delta": -0.021464646464646464
+          }
+        },
+        "client_runtime": {
+          "tokio_worker_threads": 1,
+          "sampled_global_queue_depth_peak": 0
+        },
+        "timeline": {
+          "path": null,
+          "requests_written": 0,
+          "events_written": 0,
+          "dropped_requests": 0
+        },
+        "slo": null
+      },
+      "completed_turns": [
+        {
+          "request_id": "session_synthetic_000000_round_000000",
+          "status": "completed",
+          "censored": false,
+          "ttft_ms": 32247.37,
+          "tpot_ms": 87.30666666666681,
+          "decode_tokens_per_second": 11.453879047037244,
+          "server_usage": {
+            "prompt_tokens": 256,
+            "completion_tokens": 16,
+            "total_tokens": 272,
+            "cached_prompt_tokens": 0,
+            "uncached_prompt_tokens": 256,
+            "prefix_hit_rate": 0.0
+          },
+          "output_len_actual": 16
+        },
+        {
+          "request_id": "session_synthetic_000000_round_000001",
+          "status": "completed",
+          "censored": false,
+          "ttft_ms": 58435.4,
+          "tpot_ms": 133.5399999999999,
+          "decode_tokens_per_second": 7.488392990864166,
+          "server_usage": {
+            "prompt_tokens": 528,
+            "completion_tokens": 16,
+            "total_tokens": 544,
+            "cached_prompt_tokens": 255,
+            "uncached_prompt_tokens": 273,
+            "prefix_hit_rate": 0.48295454545454547
+          },
+          "output_len_actual": 16
+        },
+        {
+          "request_id": "session_synthetic_000000_round_000002",
+          "status": "completed",
+          "censored": false,
+          "ttft_ms": 131656.71,
+          "tpot_ms": 754.0093333333342,
+          "decode_tokens_per_second": 1.3262435301419773,
+          "server_usage": {
+            "prompt_tokens": 800,
+            "completion_tokens": 16,
+            "total_tokens": 816,
+            "cached_prompt_tokens": 527,
+            "uncached_prompt_tokens": 273,
+            "prefix_hit_rate": 0.65875
+          },
+          "output_len_actual": 16
+        }
+      ],
+      "protocol_result_emitted": true,
+      "optimization_qualified": false,
+      "process_cleanup": "owned benchmark and server exited; GPU lock passed to full replay"
     }
   ]
 }
