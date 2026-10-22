@@ -1,5 +1,67 @@
 # Flint port handoff
 
+## Resume: 2026-10-21 20:03 PDT
+
+The accuracy gate is frozen at `tools/goldens/gate/flint_gate_v1.json` (schema 1). Its thresholds, metrics, and calibration family stay as written. Native teacher-forced traces pass that gate at the short fixtures and at 1024 positions. They fail at 4096 and 16384 on one layer-local scalar. The port is unqualified. Serving smoke and `tools/bench/flint_baseline.py` stay unrun until a later change makes this same file pass at 1024, 4096, and 16384.
+
+If work resumes:
+
+1. Leave `flint_gate_v1.json` unchanged. A later arithmetic fix is justified only when an isolated replay of the suspected block, fed the reference residual, still exceeds a frozen limit.
+2. Rescore native with `tools/goldens/gate` at 1024, 4096, and 16384, plus the three greedy continuations. The checker recomputes metrics and ignores any candidate `qualified` flag.
+3. Run chat/tool smoke and the baseline only after that rescore passes. Baseline shape: decode near 1k and near 8k context, 8k prefill, three runs each, one `lockf -k /tmp/flint-gpu.lock` command per run.
+4. Keep `.agent-logs/` under 15 GiB and stop new writes if home free space falls under 20 GiB. Current logs are about 845 MiB. The 3456-row replay arrays were deleted after `replay-layer1.json` was written.
+
+### Frozen suite thresholds
+
+Each suite threshold is twice the largest reference-to-reference deviation in the 31-comparison family. Per-length extrema sit beside those values in the file and are not a tighter gate. The stable margin is 0.59375: twice the winner-change margin 0.296875 from `short2-bf16-chunk2`, which is smaller than twice the top-two gap error 5.669410467147827 from `long16384-fp32-chunk32`.
+
+| Scalar | Threshold | Deviation | Source |
+| --- | --- | --- | --- |
+| Logit max abs | 35.3990478515625 | 17.69952392578125 | `long16384-fp32-chunk32` |
+| Logit relative L2 max | 0.34052122518820094 | 0.17026061259410047 | `short2-bf16-chunk64` |
+| Logit cosine distance max | 0.00770418540439799 | 0.003852092702198995 | `short2-bf16-chunk1` |
+| Logit top-1 error max | 4.28141975402832 | 2.14070987701416 | `long16384-fp32-chunk32` |
+| Logit top-two gap error max | 11.338820934295654 | 5.669410467147827 | `long16384-fp32-chunk32` |
+| `layers.1.self_attn.h` cosine distance max | 0.0020289048537087684 | 0.0010144524268543842 | `long4096-fp32-chunk32` |
+| `layers.0.mlp.h` cosine distance max | 0.0008382156076864877 | 0.00041910780384324386 | `short1-bf16-chunk8` |
+
+The file holds the same triple for every protected tensor (194 names) and for routing set disagreement and overlap loss. The largest routing set-disagreement threshold is 1.3189697265625 at `layers.26.mlp.ids`, from deviation 0.65948486328125 in `long16384-fp32-chunk32`. That value follows the precommitted two-times rule.
+
+### Native score against the frozen gate
+
+Whole-model logits and routing pass at every scored length. Stable top-1 has no failure on the teacher-forced traces.
+
+| Trace | Rows | Result | Logit max abs | Relative L2 | Cosine distance | Top-1 error | Top-two gap | Worst set disagreement | Worst overlap loss |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| short 0 | 76 | pass | 5.25 | 0.029680965730545135 | 0.0002886849896036603 | 1.34375 | 0.6015625 | 0.381578947368421 | 0.06578947368421051 |
+| short 1 | 72 | pass | 2.0 | 0.020695215975646164 | 0.000149335148827201 | 0.84375 | 1.228515625 | 0.3055555555555556 | 0.05092592592592582 |
+| short 2 | 81 | pass | 5.125 | 0.04307739883874989 | 0.0005237669957468549 | 0.71875 | 1.017578125 | 0.43209876543209874 | 0.09259259259259256 |
+| long | 1024 | pass | 11.625 | 0.0826342471188159 | 0.0023447732468229177 | 1.359375 | 1.66015625 | 0.4365234375 | 0.08772786458333326 |
+| long | 4096 | fail | 15.25 | 0.16313358073688608 | 0.002892295687629387 | 1.375 | 4.1240234375 | 0.56396484375 | 0.1346435546875 |
+| long | 16384 | fail | 17.0 | 0.1643629910666138 | 0.002892295687629387 | 2.010009765625 | 5.486328125 | 0.66619873046875 | 0.1922200520833333 |
+
+The only failure at 4096 and at 16384 is `layers.1.self_attn.h` cosine distance max 0.0022763134837696652, above 0.0020289048537087684. In the 16384-row trace that excess occurs at one position, 3452.
+
+Greedy continuations use the frozen stable margin 0.59375. A first divergence is accepted when the committed reference margin at that step is at or below the margin.
+
+| Example | First divergence | Reference margin | Mismatches of 64 | Result |
+| --- | --- | --- | --- | --- |
+| 0 | none | | 0 | pass |
+| 1 | 48 | 0.08984375 | 16 | accepted |
+| 2 | 22 | 0.203125 | 42 | accepted |
+
+### No-sink mutation
+
+Case `long1024-no-sinks` fails the frozen gate: 997 failures, `passed` false. Logit max abs is 69.25 (threshold 35.3990478515625), relative L2 max is 1.036409359474286 (threshold 0.34052122518820094), cosine distance max is 0.04730213720129761 (threshold 0.00770418540439799).
+
+### Layer 1
+
+Position 3452 is the only native row above the layer-1 attention cosine limit. The embedding there matches (max abs 0). The incoming `layers.0.mlp.h` residual differs by max abs 0.03125, relative L2 0.037205819374812134, cosine distance 0.0006034429787932227, all inside that tensor's frozen suite limits (0.046875, 0.05792637036077421, 0.0008382156076864877). Full-trace layer-1 attention at that row is max abs 0.03125, relative L2 0.0679894985919281, cosine distance 0.0022763134837696652. Logits at the same row stay small (max abs 2.5, cosine distance 4.7811311795653566e-05). The reference FP32-versus-BF16 comparison at that row has layer-1 attention cosine distance 0.000314903858680049.
+
+Replaying native layer 1 alone, in 32-row prefill chunks, on the BF16 chunk-32 reference residual for the first 3456 positions of the repeated example-1 prompt, produces layer-1 attention cosine distance 7.86696941668108e-06 at index 3452. Over the whole prefix the maxima are max abs 0.00390625, relative L2 0.012001471204275518, cosine distance 7.025741904220784e-05. A single dispatch of all 3456 rows does not compile (the compute function exceeds available stack space); chunk 32 is the prefill width the long traces use.
+
+The isolated block matches the reference. The full-trace cosine excess is amplification of an incoming residual that itself stays inside its frozen envelope. Layers 0 and 1 have no router, so this row is not an expert-set near tie. No arithmetic change follows from this measurement, and the frozen threshold stays in force. The 4096-row and 16384-row traces remain unqualified on that scalar.
+
 ## Sub-step plan — 2026-10-21 19:02 PDT
 
 The calibration rule in "Calibration rule (fixed before long-context native results)" and the checker contract below it stay fixed. Native measurements do not enter any threshold. The interrupted 16k FP32 comparison stays ineligible; it is rerun from an empty output directory, not resumed. Each GPU command takes `lockf -k /tmp/flint-gpu.lock` alone. Check `df -h ~` before each batch and stop writing if home has under 20 GiB free or `.agent-logs/` would pass 15 GiB. After a comparison, keep the compact JSON or JSONL summary and delete raw arrays no later step reads.
