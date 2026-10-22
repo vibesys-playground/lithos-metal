@@ -9,7 +9,7 @@ Trusted operator setup and evaluation default to `FLINT_TASK_ENV_MODE=sync`:
 check host prerequisites, then `uv sync --locked` into the cache addressed by
 this candidate's exact `uv.lock` SHA-256. Before dispatching agents, run
 `FLINT_TASK_ENV_MODE=sync .vibesys/tasks/flint-m3pro/setup_env.sh` outside
-agent confinement for each changed lockfile. Setup prints the venv interpreter.
+agent confinement for each changed lockfile. Setup prints the venv interpreter on its final stdout line.
 
 Agents explicitly set `FLINT_TASK_ENV_MODE=prepared`. Both setup and the
 benchmark entrypoint then check host prerequisites and load that exact cache's
@@ -27,7 +27,8 @@ path such as `/tmp/flint-warm-probe.py`, then run:
 
 ```sh
 export FLINT_TASK_ENV_MODE=prepared
-TASK_PYTHON=$(./.vibesys/tasks/flint-m3pro/setup_env.sh) || exit
+TASK_SETUP=$(./.vibesys/tasks/flint-m3pro/setup_env.sh) || exit
+TASK_PYTHON=$(printf '%s\n' "$TASK_SETUP" | /usr/bin/tail -n 1)
 /usr/bin/lockf -k /tmp/flint-gpu.lock "$TASK_PYTHON" /tmp/flint-warm-probe.py
 ```
 
