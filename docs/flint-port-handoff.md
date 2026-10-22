@@ -1,5 +1,22 @@
 # Flint port handoff
 
+## Sub-step plan — 2026-10-21 19:02 PDT
+
+The calibration rule in "Calibration rule (fixed before long-context native results)" and the checker contract below it stay fixed. Native measurements do not enter any threshold. The interrupted 16k FP32 comparison stays ineligible; it is rerun from an empty output directory, not resumed. Each GPU command takes `lockf -k /tmp/flint-gpu.lock` alone. Check `df -h ~` before each batch and stop writing if home has under 20 GiB free or `.agent-logs/` would pass 15 GiB. After a comparison, keep the compact JSON or JSONL summary and delete raw arrays no later step reads.
+
+Already eligible reference-only comparisons, kept as summaries: short examples 0, 1, and 2 at BF16 chunks 1 and 32 and FP32 chunk 32; example 0 BF16 chunks 2, 4, 8, and 16; long 1024 BF16 chunk 1 versus BF16 chunk 32; long 1024 and 4096 FP32 chunk 32 versus BF16 chunk 32. Free-running reference margins already kept: example 0 BF16 chunk 1 and FP32, example 1 BF16 chunk 1. Canonical short arrays and the 16k BF16 32-row archive stay until the comparisons that read them finish.
+
+1. This plan (now).
+2. About 25 minutes. One lock each: example 0 BF16 chunks 64 and 128, example 1 BF16 chunks 2 and 4. Compare with `--compare-to` against the retained canonical trace. Record wall time on the first command and use it to keep later steps inside their bounds. Write metrics only.
+3. About 25 minutes. Example 1 BF16 chunks 8, 16, 64, and 128, same way.
+4. About 25 minutes. Example 2 BF16 chunks 2, 4, 8, and 16.
+5. About 25 minutes. Example 2 BF16 chunks 64 and 128. Then reference-only free runs that feed the margin rule: example 1 FP32 and example 2 BF16 chunk 1.
+6. One command, which may run longer than 30 minutes: fresh FP32 32-row trace at 16384 positions compared with the retained BF16 32-row archive. Move the ineligible partial aside first. After `complete.json` exists and the row count is 16384 for every tensor, delete that archive. Then the last reference-only free run: example 2 FP32.
+7. About 25 minutes. Reduce every complete reference-only comparison with the fixed rule: for each scalar, twice the largest reference-to-reference deviation, per tensor, with per-length extrema and suite extrema both recorded. Freeze `tools/goldens/gate/flint_gate_v1.json` with the fixed prompt token IDs, every threshold and the measurement it came from, reference and weight and pack SHA-256 identities, and the injected no-sink result. No native number is an input.
+8. About 30 minutes. Add a checker that computes the metrics from native and reference traces and fails closed on missing rows, non-finite values, routing-cardinality changes, and shape or provenance mismatches. Hermetic tests cover those failures plus one pass and one fail. The stored no-sink trace must fail the frozen thresholds.
+9. About 30 minutes. Score native at 1024, 4096, and 16384, plus the short native comparisons and the three greedy continuations (example 1 and example 2 native free runs if they are not already stored). If whole-model and routing metrics pass and only a layer-local criterion fails, replay that block on the reference residual. A real defect gets a fix and a failing-before, passing-after regression. Thresholds stay frozen.
+10. Only if native qualifies: chat and tool serving smoke, then `tools/bench/flint_baseline.py` at about 1k decode, about 8k decode, and 8k prefill, three runs each, one GPU command per run.
+
 ## Time-boxed continuation handoff — 2026-10-21 18:58 PDT
 
 **Still unqualified: the fixed reference calibration and final gate are incomplete.**
