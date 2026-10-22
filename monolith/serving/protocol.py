@@ -73,6 +73,7 @@ class ToolDefinition(BaseModel):
 class ChatRequest(BaseModel):
     model_config = ConfigDict(extra='forbid', strict=True, allow_inf_nan=False)
     MAX_STOPS: ClassVar[int | None] = 4
+    STREAM_TOKEN_IDS: ClassVar[bool] = False
     model: str
     messages: list[Message] = Field(min_length=1)
     max_tokens: int | None = Field(default=None, ge=1)
@@ -97,7 +98,7 @@ class ChatRequest(BaseModel):
 
     @model_validator(mode='after')
     def validate_options(self):
-        if self.return_token_ids and self.stream:
+        if self.return_token_ids and self.stream and not self.STREAM_TOKEN_IDS:
             raise ValueError('return_token_ids is supported only for non-streaming Chat Completions')
         if self.max_tokens is not None and self.max_completion_tokens is not None:
             raise ValueError('Pass only one of max_tokens and max_completion_tokens')
@@ -204,6 +205,24 @@ def text_content(value):
 TOOL_BLOCK = re.compile(r'<tool_call>\s*(.*?)\s*</tool_call>', re.S)
 FUNCTION_BLOCK = re.compile(r'<function=([^>]+)>(.*?)</function>', re.S)
 PARAMETER_BLOCK = re.compile(r'<parameter=([^>]+)>(.*?)</parameter>', re.S)
+
+
+class CompletionRequest(ChatRequest):
+    """Single raw token prompt, with no chat-template transformation."""
+
+    STREAM_TOKEN_IDS: ClassVar[bool] = True
+    messages: list[Message] = Field(default_factory=list)
+    prompt: list[int] = Field(min_length=1)
+    ignore_eos: bool = False
+    rid: str | None = None
+
+    @model_validator(mode="after")
+    def raw_prompt_options(self):
+        if self.messages or self.tools or self.tool_choice:
+            raise ValueError("Completions accepts a raw prompt, not messages or tools")
+        if any(token < 0 for token in self.prompt):
+            raise ValueError("prompt token IDs must be nonnegative")
+        return self
 
 
 def streaming_text(content, request):

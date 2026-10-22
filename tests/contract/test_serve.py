@@ -255,8 +255,9 @@ def test_warmup_compiles_every_recipes_greedy_and_sampling_programs():
     backend.assets = SimpleNamespace(recipes={'128': {}, '4096': {}, '32768': {}}, recipe_key=None)
     backend.select_session = lambda request, context: selected.append((context, request.temperature > 0))
     backend.warmup('test-model')
-    # the recipes within the context, each compiled greedy and sampling; the cache keeps all four
-    assert selected == [(128, False), (128, True), (4096, False), (4096, True)]
+    # Each recipe compiles greedy, sampling and raw completion with ignore_eos.
+    assert selected == [(128, False), (128, True), (128, False),
+                        (4096, False), (4096, True), (4096, False)]
     assert backend.max_sessions >= len(selected) - 1
 
 

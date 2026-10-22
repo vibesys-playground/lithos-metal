@@ -244,3 +244,20 @@ trailing dimensions and a bit-for-bit matching packed prefix is accepted.
 The compiler binds the model-generated full table to its own initialized
 buffer; all weight windows remain mapped from the original pack read-only.
 Shape, dtype or prefix mismatches require a compatible pack and fail closed.
+
+### Raw token Completions
+
+`POST /v1/completions` accepts one nonempty `prompt` array of tokenizer IDs.
+It does not apply a chat template or retokenize the prompt. It shares model
+admission, sampling, context limits, prefix caching and cleanup with Chat
+Completions. Strings and batched prompts are currently rejected.
+
+`ignore_eos=true` compiles a separate generation variant with EOS stopping
+disabled, preserving requested output lengths for capacity measurements.
+Startup prepares this variant along with greedy and sampling programs.
+`return_token_ids=true` reports `completion_token_ids` in nonstream responses
+and incremental `choices[0].token_ids` in SSE frames, including special tokens.
+Streaming usage ends with truthful `prompt_tokens_details.cached_tokens` from
+the engine's actual prefix-cache result. `rid` is an optional client request
+identifier; it does not change computation. The usual `stream_options` usage
+selection is supported. Generation errors remain errors, including midstream.

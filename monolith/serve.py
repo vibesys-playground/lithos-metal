@@ -23,7 +23,7 @@ from pydantic import ValidationError
 
 from . import __version__
 
-from .serving.protocol import (APIError, ChatRequest, Message, TextPart as TextPart, anthropic_request, keep_alive_seconds,
+from .serving.protocol import (APIError, ChatRequest, CompletionRequest, Message, TextPart as TextPart, anthropic_request, keep_alive_seconds,
                                ollama_model, ollama_request, responses_request, parse_completion, streaming_text)
 from .serving.events import WireResponse, ollama_time
 from .serving.lifecycle import FifoLock, IdleRelease, ModelLoadError, ModelState
@@ -67,9 +67,9 @@ class Backend:
         # Greedy and sampling programs differ (one sampling program serves every temperature, top-k, top-p and seed):
         # compile both for every recipe, and keep all of them.
         sampled = ChatRequest(model=model_name, messages=request.messages, max_tokens=2, temperature=1.0)
-        self.max_sessions = max(self.max_sessions, 2 * len(contexts) - 1)
+        self.max_sessions = max(self.max_sessions, 3 * len(contexts) - 1)
         for context in contexts:
-            for variant in (request, sampled):
+            for variant in (request, sampled, CompletionRequest(model=model_name, prompt=[1], max_tokens=2, ignore_eos=True)):
                 logging.getLogger(__name__).info('Compiling serving context recipe %s (%s)', context,
                                                  'sampling' if variant.temperature > 0 else 'greedy')
                 self.select_session(variant, context)
@@ -107,7 +107,7 @@ class Backend:
         recipe_key, options = assets.options(prompt_tokens) if assets else (None, {'max_context': self.max_context})
         # Greedy and sampling programs differ; one sampling program serves every temperature, top-k, top-p and seed
         # (Session.set_sampling rewrites its parameter records), so compiling it is paid once per recipe.
-        sampling = (request.temperature > 0, recipe_key)
+        sampling = (request.temperature > 0, recipe_key) + (("no-eos",) if getattr(request, "ignore_eos", False) else ())
         settings = (request.temperature, request.top_k, request.top_p, request.seed)
         if self.session is not None and sampling == self.sampling:
             if request.temperature > 0 and hasattr(self.session, 'set_sampling'):
@@ -128,6 +128,7 @@ class Backend:
         if self.session is None:
             self.session = load_session(self.model_dir, self.pack_dir, **options,
                 temperature=request.temperature, top_p=request.top_p, top_k=request.top_k, seed=request.seed,
+                eos=-1 if getattr(request, "ignore_eos", False) else None,
                 autotune=False, measured_choices=True, prefill_chunk_size=self.prefill_chunk_size, prefix_cache=True,
                 # exact chunks follow the 128-row chunking, its reusable prefixes included
                 prefix_cache_min_tokens=min(self.prefill_chunk_size, 128) if self.prefill_exact else self.prefill_chunk_size,
@@ -283,17 +284,19 @@ class Backend:
         self._keep_warm = (stop, threading.Thread(target=loop, name='keep-warm', daemon=True))
         self._keep_warm[1].start()
 
-    def _complete(self, request, *, on_text=None, on_content=None, on_start=None, cancelled=None, on_progress=None, on_token_ids=None):
+    def _complete(self, request, *, on_text=None, on_content=None, on_start=None, cancelled=None, on_progress=None, on_token_ids=None, on_token_progress=None):
         from jinja2 import TemplateError
 
         request_started = time.perf_counter()
         first_text_ms = None
         messages, tools = request.template_inputs()
         try:
-            ids = self.tokenizer.apply_chat_template(messages, tokenize=True, return_dict=False, add_generation_prompt=True,
+            ids = list(request.prompt) if isinstance(request, CompletionRequest) else self.tokenizer.apply_chat_template(messages, tokenize=True, return_dict=False, add_generation_prompt=True,
                                                      enable_thinking=False, **({'tools': tools} if tools else {}))
         except (ValueError, TemplateError) as exc:
             raise APIError(str(exc), param="messages") from exc
+        if isinstance(request, CompletionRequest) and any(token >= len(self.tokenizer) for token in ids):
+            raise APIError("prompt token ID exceeds tokenizer vocabulary", param="prompt")
         # No limit (Ollama's default): until a stop or the context capacity.
         room = max(1, self.max_context - len(ids) + 1)
         limit = request.token_limit or room
@@ -337,13 +340,15 @@ class Backend:
                         on_content(content)
                     if on_progress:
                         on_progress(content, min(len(tokens), limit))
+                if on_token_progress:
+                    on_token_progress([int(token) for token in tokens[:limit]])
                 if stops and not stopped:
                     raw = self.tokenizer.decode(tokens, skip_special_tokens=True, clean_up_tokenization_spaces=False)
                     stopped = any(stop in raw for stop in stops)
                     before_stop = before_stop if stopped else len(tokens)
             # A stop string ends decoding on every path, not only while streaming.
             options = (dict(on_tokens=publish, cancelled=lambda: stopped or bool(cancelled and cancelled()))
-                       if on_text or on_content or on_progress or stops else {})
+                       if on_text or on_content or on_progress or on_token_progress or stops else {})
             if getattr(self.session, 'prefix_cache', None) is not None:
                 stable = set()
                 if messages:
@@ -413,7 +418,7 @@ class Backend:
     def visible_text(self, tokens, request):
         eos = self.session.eos
         eos_ids = {eos} if isinstance(eos, int) else set(eos)
-        end = next((i for i, token in enumerate(tokens) if token in eos_ids), None)
+        end = None if getattr(request, "ignore_eos", False) else next((i for i, token in enumerate(tokens) if token in eos_ids), None)
         finish = "stop" if end is not None else "length"
         visible = tokens[:end] if end is not None else tokens
         content = self.tokenizer.decode(visible, skip_special_tokens=True, clean_up_tokenization_spaces=False)
@@ -473,7 +478,7 @@ def create_app(backend, model_name, api_key=None):
             options['on_token_ids'] = token_ids.extend
         content, finish, prompt_tokens, completion_tokens = backend.complete(request, **options)
         wire.metrics = dict(getattr(backend, 'last_metrics', {}))
-        message, finish = parse_completion(content, request, finish)
+        message, finish = ({"content": content}, finish) if isinstance(request, CompletionRequest) else parse_completion(content, request, finish)
         body = wire.body(message, finish, prompt_tokens, completion_tokens)
         if request.return_token_ids:
             if len(token_ids) != completion_tokens:
@@ -512,7 +517,9 @@ def create_app(backend, model_name, api_key=None):
         def release():
             admitted.close()
             lock.release()
-        wire = WireResponse(protocol, model_name, custom, request.stream_usage if request.stream else None,
+        from .serving.completions import CompletionWireResponse
+        wire_type = CompletionWireResponse if protocol == "completion" else WireResponse
+        wire = wire_type(protocol, model_name, custom, request.stream_usage if request.stream else None,
                             started=arrived)
         if request.stream:
             return stream(request, wire, release, options)
@@ -539,6 +546,9 @@ def create_app(backend, model_name, api_key=None):
                 options = dict(on_text=lambda text: events.put(('text', text)),
                                on_start=lambda count: events.put(('start', count)),
                                cancelled=cancelled.is_set) if isinstance(backend, Backend) else {}
+                if options and wire.protocol == "completion":
+                    options.pop("on_text")
+                    options["on_token_progress"] = lambda ids: events.put(("tokens", ids))
                 if options and wire.protocol == 'chat':
                     options.pop('on_text')
                     if wire.usage == 'continuous':
@@ -579,6 +589,9 @@ def create_app(backend, model_name, api_key=None):
                         wire.input_tokens = value
                         for event in wire.start():
                             yield event
+                    elif kind == "tokens":
+                        for event in wire.tokens(value, backend.tokenizer):
+                            yield event
                     elif kind in ('text', 'content', 'progress'):
                         if kind == 'progress':
                             value, wire.output_tokens = value
@@ -597,7 +610,9 @@ def create_app(backend, model_name, api_key=None):
                         yield wire.error(*value)
                         break
                     else:
-                        if wire.protocol == 'chat':
+                        if wire.protocol == "completion":
+                            text = wire.text
+                        elif wire.protocol == 'chat':
                             text = value['choices'][0]['message'].get('content') or ''
                             wire.output_tokens = value['usage']['completion_tokens']
                         elif wire.protocol == 'ollama':
@@ -617,6 +632,10 @@ def create_app(backend, model_name, api_key=None):
                 cancelled.set()
         return StreamingResponse(generate(), media_type='application/x-ndjson' if wire.protocol == 'ollama' else 'text/event-stream',
                                  headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
+
+    @app.post("/v1/completions", dependencies=[Depends(authorize)])
+    def completions(request: CompletionRequest):
+        return dispatch(request, "completion")
 
     @app.post("/v1/chat/completions", dependencies=[Depends(authorize)])
     def chat(request: ChatRequest):
