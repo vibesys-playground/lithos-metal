@@ -1,0 +1,8 @@
+request_id,session_id,round_idx,arrival_time_ms,prefix_len,input_len,output_len,tool_wait_after_ms
+session_0_round_000000,0,0,0.000000,0,14438,157,0
+session_0_round_000001,0,1,0.000000,14435,1724,91,0
+session_0_round_000002,0,2,0.000000,16154,533,79,0
+session_0_round_000003,0,3,0.000000,16154,1895,220,0
+session_0_round_000004,0,4,0.000000,16682,10349,242,0
+session_0_round_000005,0,5,0.000000,27025,4269,100,0
+session_0_round_000006,0,6,0.000000,30362,1688,161,0

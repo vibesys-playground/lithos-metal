@@ -1,0 +1,24 @@
+{
+  "request_factory_commit": "89dce4a64ae12e7084fbe464ddda882fa0a4c482",
+  "full_source": "https://github.com/uw-syfi/request-factory/blob/89dce4a64ae12e7084fbe464ddda882fa0a4c482/examples/session_execution_v2_example.csv",
+  "full_source_sha256": "b73546c1a5dfa2400e9f0e132e434d49c0a803b13a5c2b5490498a8f4ba33b73",
+  "full_selection": "first session, rounds 0 through 6 (all fit 32768 context); lengths unchanged; tool waits zeroed",
+  "quick_generator": {
+    "type": "synthetic",
+    "sessions": 1,
+    "rounds": 3,
+    "input_len": 256,
+    "output_len": 16,
+    "tool_wait_ms": 1,
+    "compaction_probability": 0,
+    "arrival_rate": 1,
+    "arrival_pattern": "constant",
+    "seed": 0
+  },
+  "transformation": "tool_wait_after_ms=0 for every round; saturated arrivals; max_concurrency=1",
+  "files": {
+    "full.csv": "7bf8d8cbcc5c2e37e355f71502eee201aa9483ef30cc2ee3ed3374a01e3d3295",
+    "quick.csv": "60c890f520890c3ab0a8da3f5c273c52e5bdc8c2053f2e2bce3aa3188cd1f5b8",
+    "corpus.txt": "73d92fd22b584aeaf41acf5c2ba90b06f0a7604ebe70e1c977dda7a7a9dc8804"
+  }
+}

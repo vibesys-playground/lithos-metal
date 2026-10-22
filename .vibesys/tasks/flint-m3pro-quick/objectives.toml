@@ -1,0 +1,11 @@
+[[objective]]
+name = "tpot_ms_avg"
+direction = "min"
+
+[[objective]]
+name = "ttft_ms_avg"
+direction = "min"
+
+[[objective]]
+name = "completed_requests"
+direction = "max"

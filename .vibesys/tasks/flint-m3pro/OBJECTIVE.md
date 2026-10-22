@@ -53,53 +53,57 @@ reviews engine identity, numerics and benchmark-specific behavior.
 
 Every command that loads a model or executes Metal work must be wrapped in
 `lockf -k /tmp/flint-gpu.lock <command>`. Release it at command completion and
-never hold it idle. Both evaluator commands acquire it in the manifest.
+never hold it idle. The accuracy command acquires it in the manifest; the RF adapter acquires it
+for its complete server scope.
 
 ## Workload and scoring
 
-`benchmark/run.py` starts a fresh server, then sends one three-turn coding
-conversation. Each request carries the actual earlier replies and full
-accumulated history. The next request starts only after completion of the
-previous request; there is no think time or concurrent load. The context
-targets, counted with the pinned tokenizer and chat template, are 1024, 8192
-and 32000 tokens, within 32 tokens below each target. Source-review material
-grows the conversation. There is no persistent disk prefix cache.
+Request Factory at commit `89dce4a64ae12e7084fbe464ddda882fa0a4c482` owns
+replay, HTTP streaming and measurement. The existing VibeSys RF evaluator
+injects its pinned engine into the shared task adapter. It replays workload
+shapes with synthetic token IDs, not original coding prompts or answers.
+`benchmark/trace-identity.json` pins trace and corpus bytes. The checkpoint
+manifest pins the Flint tokenizer and chat template. Raw-token Completions
+bypasses chat framing during performance replay; accuracy still checks it.
 
-The original baseline workload had two repetitions of six turns, with paired
-turns near each bucket. A real reduced run measured 134.26 seconds TTFT at
-1024 tokens before the larger buckets. The operator reduced repetitions to
-one and turns to three, retaining all context buckets, to minimize work under
-the 600-second total budget. A remaining timeout invalidates measurement;
-candidates may not change this workload or omit the long-context request.
+Two tasks share one adapter, launcher, read-only pack policy and accuracy gate:
 
-Each turn requests exactly 64 greedy output tokens, `temperature=0`, seed 0.
-An early EOS is an invalid measurement; it is not silently padded or ignored.
-The server must stream continuous usage so the first committed token and last
-committed token can be timed even when text is held for UTF-8 decoding.
+- `flint-m3pro-quick`: RF-generated synthetic session, three rounds, each
+  appending 256 prompt tokens and requesting 16 outputs. Full prompt lengths
+  are 256, 528 and 800 tokens. This is a bootstrap gradient, not a production
+  trace. It must complete all requests within the 600-second scored budget.
+- `flint-m3pro`: the first seven rounds of the first session in RF's bundled
+  TraceLab execution-v2 example. Input/output lengths remain unchanged. Later
+  rounds are excluded because their full prompts exceed the launcher's 32768
+  context. This bounded real-trace window is the later optimization target.
 
-Two objectives in `objectives.toml` are ranked:
+Both use `text-generation-session-execution-v2`, saturated arrival,
+`max_concurrency=1`, source session order, greedy temperature zero and prefix
+reuse. Every `tool_wait_after_ms` is zero: tool time is compressed so the next
+round starts immediately after its predecessor. No concurrent users are added.
+RF's mandatory cache-telemetry probe runs before scored replay.
 
-- Maximize `decode_tokens_per_second`: arithmetic mean of each turn's
-  `(64 - 1) / (last token arrival - first token arrival)`, equally weighting
-  the three context buckets. Prefill is excluded.
-- Minimize `mean_ttft_turn2plus_ms`: mean request-to-first-committed-token
-  latency of turns 2 and 3. It includes prefix
-  lookup, uncached prefill, runtime and HTTP overhead.
+The scored budget is 600 seconds, after startup and RF preparation. Every
+planned round remains in the denominator. Requests missing at the deadline,
+including rounds not yet submitted, are recorded as timed out with TTFT and
+TPOT of 600000 ms and decode speed zero. A completion after the deadline is
+also censored. Earlier HTTP errors and short outputs invalidate evaluation.
+Accuracy remains a separate hard gate and is never inferred from performance.
 
-The protocol-v2 result includes per-bucket means and ranges, overall decode
-min/max/standard deviation, TTFT min/max and measured wall time. The JSON
-sidecar records every turn's context length, rate and any reported cache-token
-count. Cache counts are diagnostic and may be absent in the current server.
-Metrics must not rely on a claimed cache hit instead of measured latency.
-The whole benchmark command, including weight hashing, loading, packing,
-startup warmup, requests and shutdown, must finish within 600 seconds to
-produce a score. `wall_duration_s` reports that interval;
-`workload_duration_s` reports the request workload alone. Throughput and
-TTFT use per-request timings, so startup does not distort those objectives.
-The launcher also has a separate 900-second startup hang guard for the
-accuracy checker. A command-wide deadline interrupts blocking startup or requests at 600 seconds
-and unwinds through owned-server cleanup. If baseline prefill still cannot meet
-the budget, report that failure; do not silently retune the workload.
+Objectives minimize `tpot_ms_avg` and `ttft_ms_avg`, and maximize
+`completed_requests`. Completed TTFT uses RF `first_token_id_ms`; completed
+TPOT uses `token_delivery_tpot_ms`, the time from first to last output-token
+event divided by tokens delivered after the first event. These are RF's
+summary means when all requests finish, extended with the fixed worst-case
+values for unfinished rounds. Diagnostic `decode_tokens_per_second` is the
+arithmetic mean of `1000 / TPOT` over planned rounds, zero for timeouts.
+Protocol v2 and a JSON sidecar retain per-round outcomes and RF's summary.
+Startup, scored replay and whole wall duration are reported separately.
+
+The manifest accepts one benchmark per task, with no staged benchmark switch.
+Start dynamic optimization on `flint-m3pro-quick`, stop at a round boundary,
+then relaunch on `flint-m3pro` using the selected candidate commit. Scores from
+the two tasks are different experiments and must not be compared directly.
 
 ## Candidate contract
 

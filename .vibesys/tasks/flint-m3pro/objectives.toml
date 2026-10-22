@@ -1,7 +1,11 @@
 [[objective]]
-name = "decode_tokens_per_second"
-direction = "max"
+name = "tpot_ms_avg"
+direction = "min"
 
 [[objective]]
-name = "mean_ttft_turn2plus_ms"
+name = "ttft_ms_avg"
 direction = "min"
+
+[[objective]]
+name = "completed_requests"
+direction = "max"

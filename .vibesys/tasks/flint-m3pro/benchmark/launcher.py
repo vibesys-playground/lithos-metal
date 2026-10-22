@@ -19,7 +19,6 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from core import Turn, parse_stream
 from pack_policy import resolve_pack
 
 __all__ = [
@@ -133,11 +132,6 @@ class HttpChat:
             headers={"Content-Type": "application/json"},
         )
         return urllib.request.urlopen(request, timeout=600)
-
-    def complete(self, messages: list[dict], max_tokens: int) -> Turn:
-        started = self.now()
-        with self.request(messages, max_tokens, stream=True) as response:
-            return parse_stream(response, self.now, started)
 
     def greedy(self, messages: list[dict], max_tokens: int) -> dict:
         with self.request(messages, max_tokens, stream=False) as response:

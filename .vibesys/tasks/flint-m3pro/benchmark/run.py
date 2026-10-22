@@ -1,101 +1,179 @@
 #!/usr/bin/env python3
-"""Trusted evaluator entry point. Run under lockf -k /tmp/flint-gpu.lock."""
+"""VibeSys Request Factory adapter: own server lifetime, not replay execution."""
 
 from __future__ import annotations
 
 import argparse
+import contextlib
+import csv
+import hashlib
 import json
+import os
+import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
 from budget import deadline_guard
-from core import REPEATS, measure, summarize
-from launcher import HttpChat, PinnedTokenizer, model_path, server_endpoint
+from launcher import model_path, server_endpoint
+from replay_metrics import BUDGET_SECONDS, summarize
 from vs_protocol import ResultWriter
 
+STARTUP_SECONDS = 1800
 
-def main() -> int:
+
+def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--vs-output", type=Path)
+    parser.add_argument("--request-factory-engine", required=True)
+    parser.add_argument("--vs-output", type=Path, required=True)
     parser.add_argument("--output-json", type=Path)
-    parser.add_argument(
-        "--reduced",
-        action="store_true",
-        help="Operator smoke run: one repetition, all context buckets; no score",
-    )
+    parser.add_argument("--workload", choices=("quick", "full"), default="full")
+    parser.add_argument("--gpu-lock-held", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
-    if args.reduced and args.vs_output is not None:
-        parser.error("--reduced cannot publish a VibeSys score")
-    if args.vs_output is None and args.output_json is None:
-        parser.error("--vs-output or --output-json is required")
-    repeats = 1 if args.reduced else REPEATS
-    writer = ResultWriter(args.vs_output) if args.vs_output else None
-    started = time.monotonic()
+    if not args.gpu_lock_held:
+        os.execvp(
+            "lockf",
+            [
+                "lockf",
+                "-k",
+                "/tmp/flint-gpu.lock",
+                sys.executable,
+                str(Path(__file__).resolve()),
+                *sys.argv[1:],
+                "--gpu-lock-held",
+            ],
+        )
+    root = Path(__file__).resolve().parent
     output = args.output_json or Path(str(args.vs_output) + ".metrics.json")
-    observed = []
-    turn_log = output.with_suffix(".turns.jsonl")
+    writer = ResultWriter(args.vs_output)
+    started = time.monotonic()
+    rf = None
     try:
-        with deadline_guard(600):
-            turn_log.write_text("")
-            path = model_path()
-            tokenizer = PinnedTokenizer.load(path)
-            with server_endpoint(Path.cwd(), path) as url:
-
-                def observe(row):
-                    print(json.dumps({"turn": row}, allow_nan=False), flush=True)
-                    observed.append(row)
-                    with turn_log.open("a") as log:
-                        log.write(json.dumps(row, allow_nan=False) + "\n")
-
-                rows, wall = measure(
-                    HttpChat(url),
-                    tokenizer,
-                    time.monotonic,
-                    repeats=repeats,
-                    observe=observe,
+        identity = json.loads((root / "trace-identity.json").read_text())
+        for name, digest in identity["files"].items():
+            if hashlib.sha256((root / name).read_bytes()).hexdigest() != digest:
+                raise ValueError(f"Pinned RF replay input changed: {name}")
+        planned = list(csv.DictReader((root / f"{args.workload}.csv").open()))
+        with (
+            tempfile.TemporaryDirectory(prefix="flint-rf-") as temp,
+            contextlib.ExitStack() as owner,
+        ):
+            temporary = Path(temp)
+            log, summary = temporary / "requests.jsonl", temporary / "summary.json"
+            terminal = owner.enter_context((temporary / "terminal.log").open("w+"))
+            with deadline_guard(STARTUP_SECONDS):
+                path = model_path()
+                url = owner.enter_context(server_endpoint(Path.cwd(), path))
+                command = [
+                    args.request_factory_engine,
+                    "--trace",
+                    str(root / f"{args.workload}.csv"),
+                    "--input-file-format",
+                    "text-generation-session-execution-v2",
+                    "--text-file",
+                    str(root / "corpus.txt"),
+                    "--tokenizer",
+                    str(path / "tokenizer.json"),
+                    "--model",
+                    "flint",
+                    "--backend",
+                    "openai",
+                    "--dialect",
+                    "openai",
+                    "--base-url",
+                    url + "/v1",
+                    "--temperature",
+                    "0",
+                    "--arrival-mode",
+                    "saturated",
+                    "--max-concurrency",
+                    "1",
+                    "--runtime-worker-threads",
+                    "1",
+                    "--stop-session-on-error",
+                    "true",
+                    "--request-log",
+                    "true",
+                    "--log-path",
+                    str(log),
+                    "--timeline",
+                    "false",
+                    "--summary-path",
+                    str(summary),
+                ]
+                rf = subprocess.Popen(
+                    command, stdout=terminal, stderr=subprocess.STDOUT
                 )
-            values = summarize(rows, wall, repeats=repeats)
-            total_wall = time.monotonic() - started
-            if total_wall > 600:
-                raise ValueError(
-                    f"Whole benchmark exceeded 600 seconds ({total_wall:.3f}); workload={wall:.3f}"
-                )
-            values["wall_duration_s"] = total_wall
-            output.write_text(
+                # In the pinned RF revision the writer is created after its
+                # mandatory cache probe and immediately before replay starts.
+                # No requests from the trace are sent before this boundary.
+                while not log.exists():
+                    if rf.poll() is not None:
+                        raise RuntimeError(
+                            "RF preparation failed: "
+                            + (temporary / "terminal.log").read_text()[-4000:]
+                        )
+                    time.sleep(0.02)
+            startup = time.monotonic() - started
+            scored = time.monotonic()
+            deadline_timestamp = time.time() + BUDGET_SECONDS
+            print(
                 json.dumps(
-                    {"metrics": values, "turns": rows, "reduced": args.reduced},
-                    indent=2,
-                    allow_nan=False,
-                )
-                + "\n"
+                    {"startup_duration_s": startup, "scored_budget_s": BUDGET_SECONDS}
+                ),
+                flush=True,
             )
-            if writer:
-                writer.result(values)
-            print(json.dumps(values, allow_nan=False))
-            return 0
+            timed_out = False
+            try:
+                rf.wait(timeout=BUDGET_SECONDS)
+            except subprocess.TimeoutExpired:
+                timed_out = True
+                # Closing our server ends the in-flight HTTP request. RF then
+                # flushes its own buffered completed-request log and summary.
+                owner.close()
+                rf.wait(timeout=30)
+            scored_duration = min(time.monotonic() - scored, BUDGET_SECONDS)
+            if rf.returncode != 0:
+                raise RuntimeError(f"RF exited {rf.returncode}")
+            records = [json.loads(line) for line in log.read_text().splitlines()]
+            rf_summary = json.loads(summary.read_text())
+            values, turns = summarize(
+                planned,
+                records,
+                timed_out=timed_out,
+                deadline_timestamp=deadline_timestamp if timed_out else None,
+            )
+            values.update(startup_duration_s=startup, scored_duration_s=scored_duration)
+            result = dict(
+                metrics=values,
+                turns=turns,
+                timed_out=timed_out,
+                rf_summary=rf_summary,
+                identity=identity,
+                total_wall_duration_s=time.monotonic() - started,
+            )
+            output.write_text(json.dumps(result, indent=2, allow_nan=False) + "\n")
+            writer.result(values)
+            print(json.dumps(result, allow_nan=False), flush=True)
+        return 0
     except Exception as exc:
+        writer.error(f"{type(exc).__name__}: {exc}")
         output.write_text(
-            json.dumps(
-                {
-                    "status": "failed",
-                    "error": f"{type(exc).__name__}: {exc}",
-                    "wall_duration_s": time.monotonic() - started,
-                    "turns": observed,
-                    "reduced": args.reduced,
-                },
-                indent=2,
-                allow_nan=False,
-            )
+            json.dumps({"status": "failed", "error": f"{type(exc).__name__}: {exc}"})
             + "\n"
         )
-        if writer:
-            writer.error(f"{type(exc).__name__}: {exc}")
-        print(f"Benchmark failed: {exc}", file=sys.stderr)
+        print(f"RF benchmark failed: {exc}", file=sys.stderr)
         return 1
     finally:
-        if writer:
-            writer.close()
+        if rf is not None and rf.poll() is None:
+            rf.terminate()
+            try:
+                rf.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                rf.kill()
+                rf.wait(timeout=10)
+        writer.close()
 
 
 if __name__ == "__main__":

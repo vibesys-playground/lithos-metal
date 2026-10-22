@@ -1,0 +1,520 @@
+"""Flint text decoder, strict checkpoint config and affine quantized weights."""
+
+from .config import FlintConfig
+from .model import FlintModel
+from .weights import load_oracle
+
+__all__ = ["FlintConfig", "FlintModel", "load_oracle"]
+
+"""Validated text-only Flint configuration; unknown keys fail at the boundary."""
+
+import json
+import math
+from dataclasses import dataclass, fields
+from pathlib import Path
+from typing import Literal
+
+
+@dataclass(frozen=True)
+class FlintConfig:
+    hidden_size: int
+    intermediate_size: int
+    moe_intermediate_size: int
+    shared_expert_intermediate_size: int
+    num_hidden_layers: int
+    num_attention_heads: int
+    num_key_value_heads: int
+    head_dim: int
+    num_experts: int
+    num_experts_per_tok: int
+    vocab_size: int
+    max_position_embeddings: int
+    sliding_window: int
+    rms_norm_eps: float
+    rope_theta: float
+    layer_types: tuple[Literal["full_attention", "sliding_attention"], ...]
+    no_rope_layer_indices: tuple[int, ...]
+    mlp_only_layers: tuple[int, ...]
+    eos_token_id: list[int]
+    tie_word_embeddings: bool = False
+    architecture: str = "FlintForCausalLM"
+
+    @classmethod
+    def from_dict(cls, data):
+        if not isinstance(data, dict):
+            raise TypeError("config must be an object")
+        supported = {
+            "architectures": ["FlintForCausalLM"],
+            "model_type": "flint",
+            "attention_bias": False,
+            "attention_dropout": 0.0,
+            "attention_sink": True,
+            "decoder_sparse_step": 1,
+            "dtype": "bfloat16",
+            "torch_dtype": "bfloat16",
+            "hidden_act": "silu",
+            "norm_topk_prob": True,
+            "output_router_logits": False,
+            "router_aux_loss_coef": 0.0,
+            "router_expert_bias": False,
+            "scoring_func": "sigmoid",
+            "router_score_function": "sigmoid",
+            "softmax_type": "learnable",
+            "softmax_type_source": "model.attention_pattern.softmax_type",
+            "use_cache": True,
+            "use_sliding_window": True,
+            # Cache hints are accepted metadata; this engine keeps BF16 KV.
+            "kv_group_size": 64,
+            "kv_key_bits": 8,
+            "kv_value_bits": 8,
+        }
+        special = {
+            "mlx_export",
+            "quantization",
+            "rope_parameters",
+            "num_local_experts",
+            "bos_token_id",
+            "pad_token_id",
+        }
+        names = {f.name for f in fields(cls)} - {"architecture"}
+        unknown = data.keys() - names - supported.keys() - special
+        if unknown:
+            raise ValueError(f"unknown config key {min(unknown)}")
+        for key, value in supported.items():
+            if key in data and (
+                data[key] != value or type(data[key]) is not type(value)
+            ):
+                raise ValueError(
+                    f"unsupported {key}: {data[key]!r}; expected {value!r}"
+                )
+        for key, allowed in {
+            "quantization": {"bits", "group_size", "mode"},
+            "mlx_export": {
+                "bits",
+                "routed_expert_bits",
+                "embedding_bits",
+                "full_attention_layers",
+                "scale_rule",
+            },
+            "rope_parameters": {"rope_type", "rope_theta"},
+        }.items():
+            values = data.get(key, {})
+            if not isinstance(values, dict):
+                raise TypeError(f"{key} must be an object")
+            for subkey in values.keys() - allowed:
+                raise ValueError(f"unknown config key {key}.{subkey}")
+        required = names - {"tie_word_embeddings"}
+        for key in sorted(required - data.keys()):
+            raise ValueError(f"missing config key {key}")
+        values = {key: data[key] for key in names if key in data}
+        for key in (
+            "layer_types",
+            "no_rope_layer_indices",
+            "mlp_only_layers",
+            "eos_token_id",
+        ):
+            if not isinstance(values[key], list):
+                raise TypeError(f"{key} must be a list")
+            if key != "eos_token_id":
+                values[key] = tuple(values[key])
+        cfg = cls(**values)
+        for key in (
+            "hidden_size",
+            "intermediate_size",
+            "moe_intermediate_size",
+            "shared_expert_intermediate_size",
+            "num_hidden_layers",
+            "num_attention_heads",
+            "num_key_value_heads",
+            "head_dim",
+            "num_experts",
+            "num_experts_per_tok",
+            "vocab_size",
+            "max_position_embeddings",
+            "sliding_window",
+        ):
+            value = getattr(cfg, key)
+            if type(value) is not int or value <= 0:
+                raise ValueError(f"{key} must be a positive integer")
+        for key in ("rms_norm_eps", "rope_theta"):
+            value = getattr(cfg, key)
+            if (
+                type(value) not in (int, float)
+                or not math.isfinite(value)
+                or value <= 0
+            ):
+                raise ValueError(f"{key} must be finite and positive")
+        for key in (
+            "hidden_size",
+            "intermediate_size",
+            "moe_intermediate_size",
+            "shared_expert_intermediate_size",
+        ):
+            if getattr(cfg, key) % 256:
+                raise ValueError(
+                    f"{key} must be a multiple of 256 for packed projections"
+                )
+        if cfg.num_attention_heads * cfg.head_dim % 256:
+            raise ValueError("num_attention_heads * head_dim must be a multiple of 256")
+        if cfg.tie_word_embeddings is not False:
+            raise ValueError("unsupported tie_word_embeddings")
+        if cfg.num_attention_heads % cfg.num_key_value_heads:
+            raise ValueError(
+                "num_attention_heads must be divisible by num_key_value_heads"
+            )
+        if cfg.head_dim % 32:
+            raise ValueError("head_dim must be a multiple of 32")
+        if not 1 <= cfg.num_experts_per_tok <= min(16, cfg.num_experts):
+            raise ValueError("num_experts_per_tok must be in 1..min(16, num_experts)")
+        if len(cfg.layer_types) != cfg.num_hidden_layers or any(
+            k not in ("full_attention", "sliding_attention") for k in cfg.layer_types
+        ):
+            raise ValueError(
+                "layer_types must contain one supported attention kind per layer"
+            )
+        for key in ("no_rope_layer_indices", "mlp_only_layers"):
+            indices = getattr(cfg, key)
+            if any(
+                type(i) is not int or not 0 <= i < cfg.num_hidden_layers
+                for i in indices
+            ) or len(set(indices)) != len(indices):
+                raise ValueError(f"{key} must contain distinct layer indices")
+        if not cfg.eos_token_id or any(
+            type(i) is not int or not 0 <= i < cfg.vocab_size for i in cfg.eos_token_id
+        ):
+            raise ValueError("eos_token_id must contain valid vocabulary IDs")
+        for key in ("bos_token_id", "pad_token_id"):
+            if key in data and (
+                type(data[key]) is not int or not 0 <= data[key] < cfg.vocab_size
+            ):
+                raise ValueError(f"{key} must be a vocabulary ID")
+        if data.get("num_local_experts", cfg.num_experts) != cfg.num_experts:
+            raise ValueError("num_local_experts must equal num_experts")
+        expected = {
+            "quantization": {"bits": 4, "group_size": 64},
+            "mlx_export": {"bits": 4, "routed_expert_bits": 4, "embedding_bits": 8},
+        }
+        for key, entries in expected.items():
+            for subkey, value in entries.items():
+                if data.get(key, {}).get(subkey) != value:
+                    raise ValueError(f"unsupported {key}.{subkey}: expected {value}")
+        quant = data["quantization"]
+        if quant.get("mode", "affine") != "affine":
+            raise ValueError("unsupported quantization.mode")
+        export = data["mlx_export"]
+        if export.get("scale_rule", "mse") != "mse":
+            raise ValueError("unsupported mlx_export.scale_rule")
+        full = [i for i, kind in enumerate(cfg.layer_types) if kind == "full_attention"]
+        if export.get("full_attention_layers", full) != full:
+            raise ValueError(
+                "mlx_export.full_attention_layers disagrees with layer_types"
+            )
+        rope = data.get("rope_parameters", {})
+        if rope.get("rope_type", "default") != "default":
+            raise ValueError("unsupported rope_parameters.rope_type")
+        if rope.get("rope_theta", cfg.rope_theta) != cfg.rope_theta:
+            raise ValueError("rope_parameters.rope_theta disagrees with rope_theta")
+        return cfg
+
+    @classmethod
+    def from_pretrained(cls, path):
+        return cls.from_dict(json.loads((Path(path) / "config.json").read_text()))
+
+    @property
+    def rotary_dim(self):
+        return self.head_dim
+
+"""Flint composition through shared dense, causal-attention and sigmoid-MoE layers."""
+
+import numpy as np
+
+from ...core.dtypes import DType
+from ...core.shapes import T
+from ...nn import (
+    DecoderLayer,
+    Embedding,
+    GatedMLP,
+    GreedySampler,
+    LMHead,
+    LowerContext,
+    Model,
+    RMSNorm,
+    StateSpec,
+    state_shape,
+)
+from ...nn.causal_attention import CausalAttention
+from ...nn.rope import rope_tables_permuted
+from ...nn.sigmoid_moe import SigmoidMoE
+from ..registry import register_model
+from .config import FlintConfig
+from .weights import bind_checkpoint_formats, checkpoint_views
+
+
+@register_model("FlintForCausalLM")
+class FlintModel(Model):
+    checkpoint_views = staticmethod(checkpoint_views)
+
+    def __init__(
+        self, config, *, max_context=4096, pack_rows=16, num_layers_override=None
+    ):
+        super().__init__(prefix="")
+        c = self.config = config
+        if not 0 < max_context <= c.max_position_embeddings:
+            raise ValueError("max_context must be in 1..max_position_embeddings")
+        self.max_context = max_context
+        self.n_layers = (
+            c.num_hidden_layers if num_layers_override is None else num_layers_override
+        )
+        if not 0 < self.n_layers <= c.num_hidden_layers:
+            raise ValueError("num_layers_override must be in 1..num_hidden_layers")
+        self.embed_tokens = Embedding(
+            c.vocab_size,
+            c.hidden_size,
+            "model.embed_tokens.weight",
+            prefix="embed_tokens.",
+        )
+        self.blocks = []
+        for i in range(self.n_layers):
+            lp, hp = f"layers.{i}.", f"model.layers.{i}."
+            mixer = CausalAttention(
+                c.hidden_size,
+                c.num_attention_heads,
+                c.num_key_value_heads,
+                c.head_dim,
+                c.rope_theta,
+                c.rms_norm_eps,
+                hf_prefix=f"{hp}self_attn.",
+                prefix=f"{lp}self_attn.",
+                max_context=max_context,
+                rotary=i not in c.no_rope_layer_indices,
+                window=c.sliding_window
+                if c.layer_types[i] == "sliding_attention"
+                else 0,
+            )
+            if i in c.mlp_only_layers:
+                mlp = GatedMLP(
+                    c.hidden_size,
+                    c.intermediate_size,
+                    hf_prefix=f"{hp}mlp.",
+                    prefix=f"{lp}mlp.",
+                    chunk=pack_rows // 2,
+                )
+                mlp.gate_up.round_silu = True
+                mlp.down.round_residual = True
+            else:
+                mlp = SigmoidMoE(
+                    c.hidden_size,
+                    c.num_experts,
+                    c.num_experts_per_tok,
+                    c.moe_intermediate_size,
+                    c.shared_expert_intermediate_size,
+                    hf_prefix=f"{hp}mlp.",
+                    prefix=f"{lp}mlp.",
+                    chunk=pack_rows // 2,
+                )
+            self.blocks.append(
+                DecoderLayer(
+                    i,
+                    RMSNorm(
+                        c.hidden_size,
+                        c.rms_norm_eps,
+                        f"{hp}input_layernorm.weight",
+                        prefix=f"{lp}input_norm.",
+                        one_plus=False,
+                    ),
+                    mixer,
+                    RMSNorm(
+                        c.hidden_size,
+                        c.rms_norm_eps,
+                        f"{hp}post_attention_layernorm.weight",
+                        prefix=f"{lp}post_norm.",
+                        one_plus=False,
+                    ),
+                    mlp,
+                    prefix=lp,
+                )
+            )
+        self.norm = RMSNorm(
+            c.hidden_size,
+            c.rms_norm_eps,
+            "model.norm.weight",
+            prefix="norm.",
+            one_plus=False,
+        )
+        self.lm_head = LMHead(
+            c.hidden_size, c.vocab_size, hf_name="lm_head.weight", prefix="lm_head."
+        )
+        self.sampler = GreedySampler(prefix="sampler.")
+        self.tap_values = {}
+
+    @classmethod
+    def from_checkpoint(cls, path, **options):
+        model = cls(FlintConfig.from_pretrained(path), **options)
+        bind_checkpoint_formats(model, path)
+        return model
+
+    def layers(self):
+        return self.blocks
+
+    def state_spec(self):
+        return StateSpec(
+            tuple(
+                entry for block in self.blocks for entry in block.mixer.state_entries()
+            )
+        )
+
+    def feature_taps(self):
+        return list(range(self.n_layers))
+
+    def tables(self):
+        if all(i in self.config.no_rope_layer_indices for i in range(self.n_layers)):
+            return {}
+        cos, sin = rope_tables_permuted(
+            self.config.rope_theta,
+            self.config.head_dim,
+            self.config.head_dim,
+            self.max_context,
+        )
+        return {"causal_rope_cos": ("F32", cos), "causal_rope_sin": ("F32", sin)}
+
+    def forward(self, ids, state, pos):
+        h = self.embed_tokens.forward(ids)
+        hidden = [h]
+        for block in self.blocks:
+            h = block.forward(h, state, pos)
+            hidden.append(h)
+        return self.lm_head.forward(self.norm.forward(h)), hidden, state
+
+    def lower(self, g, *xs):
+        tokens = xs[0] if xs else g.input("tokens", (T,), DType.I32)
+        ctx = LowerContext(t=tokens.shape[0])
+        for entry in self.state_spec().entries:
+            ctx.states[entry.name] = g.state(
+                entry.name, state_shape(entry), entry.dtype
+            )
+        for name, (dtype, arr) in self.tables().items():
+            ctx.consts[name] = g.const(
+                name, np.asarray(arr).shape, DType.parse(dtype.lower())
+            )
+        h = self.embed_tokens.lower(g, tokens, ctx)
+        self.tap_values = {-1: h}
+        for block in self.blocks:
+            h = block.lower(g, h, ctx)
+            self.tap_values[block.index] = h
+        logits = self.lm_head.lower(g, h, self.norm.lower(g, h), ctx)
+        return self.sampler.lower(g, logits, ctx)
+
+"""Checkpoint byte views: U8-packed MLX words and stacked routed experts.
+
+No dequantization or re-quantization occurs here. Each expert becomes an
+ordinary matrix view for the existing shared Experts/slab pack mechanism.
+"""
+
+from dataclasses import replace
+
+from ...formats.safetensors_reader import SafetensorsDir
+from ...nn.pack_plan import bind_formats, dequantized_tensors
+
+
+def checkpoint_views(info):
+    name = info.name
+    if ".mlp.switch_mlp." in name:
+        if len(info.shape) != 3:
+            raise ValueError(f"{name}: expected stacked [experts, rows, columns]")
+        count = info.shape[0]
+        stride, remainder = divmod(info.end - info.start, count)
+        if remainder:
+            raise ValueError(f"{name}: expert byte size does not divide storage")
+        views = [
+            replace(
+                info,
+                name=name.replace(".mlp.switch_mlp.", f".mlp.experts.{e}."),
+                shape=info.shape[1:],
+                start=info.start + e * stride,
+                end=info.start + (e + 1) * stride,
+            )
+            for e in range(count)
+        ]
+    else:
+        views = [info]
+    for view in views:
+        if view.name.endswith(".weight") and view.dtype == "U8":
+            if view.shape[-1] % 4:
+                raise ValueError(
+                    f"{view.name}: packed byte width must divide into uint32 words"
+                )
+            view = replace(
+                view, dtype="U32", shape=(*view.shape[:-1], view.shape[-1] // 4)
+            )
+        if view.name == "model.embed_tokens.weight":
+            view = replace(view, format="int8_affine")
+        yield view
+
+
+def bind_checkpoint_formats(model, path):
+    checkpoint = SafetensorsDir(path, views=checkpoint_views)
+    try:
+        formats = bind_formats(model, checkpoint)
+        # U32 affine storage is ambiguous without the model's declared bit width.
+        model.embed_tokens.set_format("weight", "int8_affine")
+        formats["model.embed_tokens.weight"] = "int8_affine"
+        weight_map = model.full_weight_map()
+        expected = set(weight_map)
+        actual = set(checkpoint.names())
+        for name in expected:
+            spec = weight_map[name][2]
+            info = checkpoint.info(name)
+            expected_dtype = "BF16" if spec.aux or ".mlp.gate.weight" in name else "U32"
+            if info.dtype != expected_dtype:
+                raise ValueError(
+                    f"{name}: expected storage dtype {expected_dtype}, got {info.dtype}"
+                )
+            if spec.aux:
+                if info.shape != spec.shape:
+                    raise ValueError(f"{name}: expected {spec.shape}, got {info.shape}")
+                continue
+            bits = 8 if name == "model.embed_tokens.weight" else 4
+            if info.dtype == "BF16":
+                logical = info.shape
+            elif info.dtype == "U32":
+                logical = (*info.shape[:-1], info.shape[-1] * (32 // bits))
+                for side in ("scales", "biases"):
+                    side_name = name[:-6] + side
+                    if checkpoint.info(side_name).shape != (
+                        spec.shape[0],
+                        spec.shape[1] // 64,
+                    ):
+                        raise ValueError(
+                            f"{side_name}: incompatible group_size or shape"
+                        )
+                    actual.discard(side_name)
+            else:
+                raise ValueError(f"{name}: unsupported storage dtype {info.dtype}")
+            if logical != spec.shape:
+                raise ValueError(f"{name}: expected {spec.shape}, got {logical}")
+        unknown = actual - expected
+        if unknown:
+            raise ValueError(f"unknown checkpoint tensor {min(unknown)}")
+        return formats
+    finally:
+        checkpoint.close()
+
+
+def load_oracle(model, path, *, device=None):
+    import numpy as np
+    import torch
+
+    checkpoint = SafetensorsDir(path, views=checkpoint_views)
+    try:
+
+        def stream():
+            for name, array, storage in dequantized_tensors(model, checkpoint):
+                # Quantized matmul accumulates the affine grid in FP32. Only the
+                # embedding gather rounds its decoded rows before consumption.
+                dtype = torch.float32 if storage == "int4_affine" else torch.bfloat16
+                tensor = torch.from_numpy(np.array(array, dtype=np.float32, copy=True))
+                yield name, tensor.to(dtype=dtype, device=device)
+
+        model.load_weights(stream(), strict=True)
+    finally:
+        checkpoint.close()

@@ -9,9 +9,14 @@ interface = "service"
 command = ["lockf", "-k", "/tmp/flint-gpu.lock", "python3", "${PROJECT_ROOT}/.vibesys/tasks/flint-m3pro/accuracy_checker/checker.py"]
 timeout_seconds = 1800
 
+[evaluator]
+name = "vibesys-evaluator-request-factory"
+version = "0.1.0"
+
 [benchmark]
-command = ["lockf", "-k", "/tmp/flint-gpu.lock", "python3", "${PROJECT_ROOT}/.vibesys/tasks/flint-m3pro/benchmark/run.py"]
-timeout_seconds = 1500
+entrypoint = "request-factory-adapter"
+args = ["${PROJECT_ROOT}/.vibesys/tasks/flint-m3pro/benchmark/run.py"]
+timeout_seconds = 2500
 result_protocol = 2
 
 [catalogue]
