@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "benchmark"))
-from replay_metrics import WORST_MS, summarize
+from replay_metrics import BUDGET_SECONDS, WORST_MS, replay_window, summarize
 
 
 class ReplayMetricsTests(unittest.TestCase):
@@ -158,3 +158,47 @@ class SummaryMappingTests(unittest.TestCase):
         record["outcome"]["complete_timestamp"] = 20
         with self.assertRaises(ValueError):
             summarize(self.planned, [record], timed_out=True, deadline_timestamp=20)
+
+
+class ReplayWindowTests(unittest.TestCase):
+    def test_delayed_log_creation_never_extends_scoring_window(self):
+        # RF is represented by its real timestamped log contract. No clock or
+        # process runs: these outcomes cover either order of writer/request start.
+        for writer_start in (9, 10, 11):
+            for finished in (609, 610, 611):
+                records = [
+                    {
+                        "outcome": {
+                            "submit_timestamp": 10,
+                            "complete_timestamp": finished,
+                        }
+                    }
+                ]
+                start, deadline, expired = replay_window(
+                    records,
+                    log_created_timestamp=writer_start,
+                    watchdog_timed_out=False,
+                )
+                self.assertEqual(start, 10)
+                self.assertEqual(deadline, 10 + BUDGET_SECONDS)
+                self.assertEqual(expired, finished > deadline)
+
+    def test_no_outcome_retains_watchdog_timeout_and_bad_timestamps_fail(self):
+        self.assertEqual(
+            replay_window([], log_created_timestamp=10, watchdog_timed_out=True),
+            (10, 610, True),
+        )
+        for submitted, completed in [(math.nan, 20), (1, math.inf), (2, 1), (True, 20)]:
+            with self.assertRaises(ValueError):
+                replay_window(
+                    [
+                        {
+                            "outcome": {
+                                "submit_timestamp": submitted,
+                                "complete_timestamp": completed,
+                            }
+                        }
+                    ],
+                    log_created_timestamp=10,
+                    watchdog_timed_out=True,
+                )

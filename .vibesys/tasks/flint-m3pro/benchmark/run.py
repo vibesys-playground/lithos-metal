@@ -17,7 +17,7 @@ from pathlib import Path
 
 from budget import deadline_guard
 from launcher import model_path, server_endpoint
-from replay_metrics import BUDGET_SECONDS, summarize
+from replay_metrics import BUDGET_SECONDS, replay_window, summarize
 from vs_protocol import ResultWriter
 
 STARTUP_SECONDS = 1800
@@ -48,6 +48,7 @@ def main():
     output = args.output_json or Path(str(args.vs_output) + ".metrics.json")
     writer = ResultWriter(args.vs_output)
     started = time.monotonic()
+    started_timestamp = time.time()
     rf = None
     try:
         identity = json.loads((root / "trace-identity.json").read_text())
@@ -107,9 +108,9 @@ def main():
                 rf = subprocess.Popen(
                     command, stdout=terminal, stderr=subprocess.STDOUT
                 )
-                # In the pinned RF revision the writer is created after its
-                # mandatory cache probe and immediately before replay starts.
-                # No requests from the trace are sent before this boundary.
+                # The writer starts after RF's mandatory cache probe. Its file
+                # birth time provides a watchdog boundary; final scoring uses
+                # RF's own first-submit timestamp to remove scheduling skew.
                 while not log.exists():
                     if rf.poll() is not None:
                         raise RuntimeError(
@@ -138,7 +139,6 @@ def main():
                 # flushes its own buffered completed-request log and summary.
                 owner.close()
                 rf.wait(timeout=30)
-            scored_duration = min(time.time() - replay_started, BUDGET_SECONDS)
             if rf.returncode != 0:
                 raise RuntimeError(
                     f"RF exited {rf.returncode}: "
@@ -146,6 +146,13 @@ def main():
                 )
             records = [json.loads(line) for line in log.read_text().splitlines()]
             rf_summary = json.loads(summary.read_text())
+            replay_started, deadline_timestamp, timed_out = replay_window(
+                records,
+                log_created_timestamp=replay_started,
+                watchdog_timed_out=timed_out,
+            )
+            startup = replay_started - started_timestamp
+            scored_duration = min(time.time() - replay_started, BUDGET_SECONDS)
             values, turns = summarize(
                 planned,
                 records,

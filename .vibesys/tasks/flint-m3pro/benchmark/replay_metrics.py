@@ -2,10 +2,39 @@
 
 import math
 
-__all__ = ["BUDGET_SECONDS", "WORST_MS", "summarize"]
+__all__ = ["BUDGET_SECONDS", "WORST_MS", "replay_window", "summarize"]
 
 BUDGET_SECONDS = 600
 WORST_MS = BUDGET_SECONDS * 1000
+
+
+def replay_window(records, *, log_created_timestamp, watchdog_timed_out):
+    """Use RF's first submission as the authoritative start of scored work.
+
+    The async log writer's file creation is a watchdog approximation. Reconcile
+    against actual RF timestamps so scheduler delay cannot admit extra work.
+    With no outcome the entire planned trace is censored at watchdog expiry.
+    """
+    if not _finite(log_created_timestamp):
+        raise ValueError("Invalid RF log creation timestamp")
+    for record in records:
+        outcome = record["outcome"]
+        if not all(
+            _finite(outcome.get(key))
+            for key in ("submit_timestamp", "complete_timestamp")
+        ):
+            raise ValueError("Invalid RF request timestamp")
+        if outcome["complete_timestamp"] < outcome["submit_timestamp"]:
+            raise ValueError("RF completion precedes submission")
+    start = min(
+        (r["outcome"]["submit_timestamp"] for r in records),
+        default=log_created_timestamp,
+    )
+    deadline = start + BUDGET_SECONDS
+    expired = watchdog_timed_out or any(
+        r["outcome"]["complete_timestamp"] > deadline for r in records
+    )
+    return start, deadline, expired
 
 
 def summarize(
