@@ -9,8 +9,10 @@ import argparse
 import copy
 import hashlib
 import json
+import subprocess
 import sys
 import tempfile
+import zipfile
 from contextlib import nullcontext
 from pathlib import Path
 
@@ -27,6 +29,12 @@ def inputs(args):
 
 
 def reference(args, ids, save):
+    expected = json.loads(args.fixture.read_text())["reference"]["commit"]
+    actual = subprocess.check_output(
+        ["git", "-C", str(args.rec), "rev-parse", "HEAD"], text=True, timeout=10
+    ).strip()
+    if actual != expected:
+        raise ValueError(f"reference revision: expected {expected}, got {actual}")
     sys.path.insert(0, str(args.rec / "engine/src"))
     import mlx.core as mx
     from mlx_lm.models.base import create_attention_mask
@@ -85,9 +93,14 @@ def reference(args, ids, save):
         end = boundaries[j + 1] if j + 1 < len(boundaries) else len(ids)
         h = model.model.embed_tokens(mx.array([ids[start:end]]))
 
-        def emit(name, value, start=start):
-            mx.eval(value)
-            save(start, name, np.array(value[0].astype(mx.float32)))
+        pending = []
+
+        def emit(name, value, start=start, pending=pending):
+            if args.batch_eval or len(ids) > 4096:
+                pending.append((name, value[0].astype(mx.float32)))
+            else:
+                mx.eval(value)
+                save(start, name, np.array(value[0].astype(mx.float32)))
 
         emit("embed_tokens.h", h)
         for i, (layer, cache) in enumerate(zip(model.layers, caches, strict=True)):
@@ -143,7 +156,9 @@ def reference(args, ids, save):
             h = h + layer.mlp(x)
             emit(f"layers.{i}.mlp.h", h)
         emit("logits", model.lm_head(model.model.norm(h)))
-        mx.eval([cache.state for cache in caches])
+        mx.eval([value for _, value in pending], [cache.state for cache in caches])
+        for name, value in pending:
+            save(start, name, np.array(value))
         print(json.dumps({"position": start, "rows": h.shape[1]}), flush=True)
 
 
@@ -413,6 +428,7 @@ def main():
     p.add_argument("--length", type=int)
     p.add_argument("--chunk", type=int, default=32)
     p.add_argument("--compact", action="store_true")
+    p.add_argument("--batch-eval", action="store_true")
     p.add_argument("--ops", action="store_true")
     p.add_argument("--isolated-inputs", type=Path)
     p.add_argument("--precision", choices=["bf16", "fp32"], default="bf16")
@@ -433,9 +449,14 @@ def main():
     marker = args.arrays / "complete.json"
     marker.unlink(missing_ok=True)
     input_hash = hashlib.sha256(json.dumps(ids).encode()).hexdigest()
+    config_hash = hashlib.sha256((args.model / "config.json").read_bytes()).hexdigest()
     if args.compare_to:
         completed = json.loads((args.compare_to / "complete.json").read_text())
-        if completed["input_sha256"] != input_hash or completed["rows"] != len(ids):
+        if (
+            completed["input_sha256"] != input_hash
+            or completed["rows"] != len(ids)
+            or completed["config_sha256"] != config_hash
+        ):
             raise ValueError("reference trace has incompatible input IDs/row count")
     arrays = {}
     reference_arrays = {}
@@ -447,7 +468,15 @@ def main():
 
     def flush_chunk():
         if staged:
-            np.savez_compressed(args.arrays / f"chunk-{stage_start:06d}.npz", **staged)
+            with zipfile.ZipFile(
+                args.arrays / f"chunk-{stage_start:06d}.npz",
+                "w",
+                compression=zipfile.ZIP_DEFLATED,
+                compresslevel=1,
+            ) as archive:
+                for name, value in staged.items():
+                    with archive.open(name + ".npy", "w") as entry:
+                        np.lib.format.write_array(entry, value, allow_pickle=False)
             staged.clear()
 
     with (
@@ -537,6 +566,8 @@ def main():
                 else "arrays",
                 "rows": len(ids),
                 "input_sha256": input_hash,
+                "config_sha256": config_hash,
+                "batch_eval": args.batch_eval or len(ids) > 4096,
                 "tensor_rows": seen_rows,
             },
             indent=2,
