@@ -1,5 +1,56 @@
 # Flint port handoff
 
+## Continuation checkpoint — 2026-10-21 18:32 PDT
+
+**Still unqualified: the fixed reference calibration and final gate are incomplete.**
+Native teacher-forced comparisons are complete at 1024, 4096 and 16384 positions.
+All three canonical references reproduce all 192 committed greedy tokens and
+stored top-two logits exactly. The complete native long-context measurements
+and isolated-block evidence are recorded below.
+
+Evidence points to BF16 rounding amplified by near-tie expert choices, but the
+final bug/noise decision must wait for the complete independent noise envelope.
+A partial comparison still fails layer-1 attention cosine distance:
+**0.00227631348 observed versus 0.00202890485 allowed**. The fixed two-times
+reference-only calibration rule has not been relaxed to make this pass.
+Do not start optimization from a claimed qualified baseline yet.
+
+No model arithmetic, kernel, recipe, fusion, prefill path or server-startup
+behavior changed in this continuation. The later startup/prefill priority was
+cancelled by the user; speed remains the optimization experiment's work.
+Serving smoke and the requested three-run timing measurements remain pending.
+The earlier bundle-reported TTFT 99.5 s / decode 10.2 tok/s are not new
+measurements from this continuation.
+
+Remaining work, in order:
+
+1. Complete the queued FP32 16k reference comparison.
+2. Complete the predeclared BF16 short arithmetic family: example 0 chunks
+   64/128, and examples 1/2 chunks 2/4/8/16/64/128. Compare directly against each
+   retained canonical trace using `--compare-to`; retain metrics, not raw arrays.
+3. Complete free-running example 1 FP32/native and example 2 BF16-1/FP32/native.
+4. Reduce the entire fixed reference family, freeze the measured limits outside
+   candidate ownership, evaluate all native cases and the no-sink mutation.
+5. Only after qualification: CLI chat/tool smoke, then three decode/prefill
+   measurements each at 1k and 8k. The helper supports one run per GPU command.
+
+Local reduction state is retained in `.agent-logs/`: comparison JSON/JSONL and
+capture metadata, `build_evidence.py`, `summarize_flint.py`, `export_gate.py`, and
+`check_disk.py`. The reducer understands cached metrics after raw-array cleanup.
+The 1k BF16 ordering trace's completion marker was reconstructed only after
+validating all **198656** real records (194 tensors × 1024 one-row positions)
+for contiguous, complete, finite measurements. No missing result was synthesized.
+
+Disk policy is **20 GB maximum logs and at least 20 GiB free** before each batch.
+Current logs are about **8.3 GiB**. Retain the 16k reference archive only until
+its pending FP32 comparison completes, and canonical short arrays only until
+all declared arithmetic comparisons finish. Other compared raw arrays were
+removed; their metrics and provenance remain. Submit at most one GPU-lock
+command from this thread at a time. All model/Metal work remains under
+`lockf -k /tmp/flint-gpu.lock`.
+
+## Historical handoff at 15:56 PDT
+
 **Stopped at the exact-token gate; this candidate is not qualified for optimization.**
 The implementation loads, packs, compiles and decodes on the M3 Pro, but native
 continuation differs from the independent reference on the second fixture.
