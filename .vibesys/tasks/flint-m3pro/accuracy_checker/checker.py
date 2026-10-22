@@ -21,6 +21,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "benchmark"))
 from launcher import MODEL, REVISION, HttpChat, PinnedTokenizer, model_path, server_endpoint
+from pack_policy import failure_exit_status
 
 __all__ = [
     "load_pins",
@@ -504,12 +505,14 @@ def main() -> int:
         finally:
             candidate_path.unlink(missing_ok=True)
         if failures:
-            raise RuntimeError("; ".join(f"{type(exc).__name__}: {exc}" for exc in failures))
+            summary = "; ".join(f"{type(exc).__name__}: {exc}" for exc in failures)
+            print(f"Accuracy failed: RuntimeError: {summary}", file=sys.stderr)
+            return failure_exit_status(failures)
         print(json.dumps(result))
         return 0
     except Exception as exc:
         print(f"Accuracy failed: {type(exc).__name__}: {exc}", file=sys.stderr)
-        return 1
+        return failure_exit_status([exc])
 
 
 if __name__ == "__main__":

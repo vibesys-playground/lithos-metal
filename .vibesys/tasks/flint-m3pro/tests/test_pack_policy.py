@@ -9,10 +9,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "benchmark"))
 from pack_policy import (
+    ENVIRONMENT_REFUSED_EXIT,
     MARGIN_BYTES,
     PACK_BYTES,
     PACK_KEY,
+    HostRefusal,
     default_pack_dir,
+    failure_exit_status,
     resolve_pack,
 )
 
@@ -58,7 +61,7 @@ class PackPolicyTests(unittest.TestCase):
                 p.name: (p.read_bytes(), p.stat().st_mtime_ns) for p in pack.iterdir()
             }
             self.assertEqual(before, after)
-            with self.assertRaisesRegex(ValueError, "Insufficient free disk"):
+            with self.assertRaisesRegex(HostRefusal, "Insufficient free disk"):
                 resolve_pack(
                     home / "worktree",
                     {},
@@ -120,3 +123,12 @@ class PackPolicyTests(unittest.TestCase):
             (pack / "pack-key.json").unlink()
             with self.assertRaisesRegex(ValueError, "pack-key.json"):
                 resolve_pack(home / "worktree", {}, home, free_bytes=2**60)
+
+    def test_only_a_host_refusal_alone_exits_with_the_refusal_status(self):
+        refusal = HostRefusal("Insufficient free disk")
+        self.assertEqual(failure_exit_status([refusal]), ENVIRONMENT_REFUSED_EXIT)
+        self.assertEqual(failure_exit_status([refusal, refusal]), ENVIRONMENT_REFUSED_EXIT)
+        # A candidate failure next to a refusal is still the candidate's.
+        self.assertEqual(failure_exit_status([refusal, ValueError("logits mismatch")]), 1)
+        self.assertEqual(failure_exit_status([ValueError("Insufficient free disk")]), 1)
+        self.assertEqual(failure_exit_status([]), 1)

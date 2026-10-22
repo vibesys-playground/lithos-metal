@@ -5,10 +5,35 @@ import json
 import shutil
 from pathlib import Path
 
-__all__ = ["PACK_BYTES", "MARGIN_BYTES", "PACK_KEY", "default_pack_dir", "resolve_pack"]
+__all__ = [
+    "ENVIRONMENT_REFUSED_EXIT",
+    "PACK_BYTES",
+    "MARGIN_BYTES",
+    "PACK_KEY",
+    "HostRefusal",
+    "default_pack_dir",
+    "failure_exit_status",
+    "resolve_pack",
+]
 PACK_BYTES = 22_736_175_104
 MARGIN_BYTES = 2 * 1024**3
 PACK_KEY = "65dcd02bfffafe7ef9c806b04a40f155ea4690d0111d77e03efff89a53c7ffe9"
+
+
+# VibeSys evaluator protocol: a trusted evaluator command that exits 75 says its host
+# refused the measurement before judging the candidate, so the run measures again later.
+ENVIRONMENT_REFUSED_EXIT = 75
+
+
+class HostRefusal(ValueError):
+    """The host cannot admit this measurement; nothing of the candidate was judged."""
+
+
+def failure_exit_status(failures):
+    """75 when every failure is the host's refusal, else 1 (the candidate failed)."""
+    if failures and all(isinstance(failure, HostRefusal) for failure in failures):
+        return ENVIRONMENT_REFUSED_EXIT
+    return 1
 
 
 def default_pack_dir(home):
@@ -49,7 +74,7 @@ def resolve_pack(workspace, env, home, *, free_bytes=None):
     available = shutil.disk_usage(path).free if free_bytes is None else free_bytes
     required = PACK_BYTES + MARGIN_BYTES
     if available < required:
-        raise ValueError(
+        raise HostRefusal(
             f"Insufficient free disk: {available} bytes available; need {required} "
             "bytes (one pack plus 2 GiB margin). Do not repack or copy weights."
         )

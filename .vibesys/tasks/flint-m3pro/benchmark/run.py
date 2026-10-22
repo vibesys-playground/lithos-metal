@@ -24,6 +24,7 @@ def main():
     # enter_task_environment has switched off the ambient interpreter.
     from budget import deadline_guard
     from launcher import model_path, server_endpoint
+    from pack_policy import failure_exit_status
     from replay_metrics import BUDGET_SECONDS, replay_window, summarize
     from vs_protocol import ResultWriter
     from profile_metrics import ProfileWriter, profile_values, synthetic_profile
@@ -239,7 +240,7 @@ def main():
             + "\n"
         )
         print(f"RF benchmark failed: {exc}", file=sys.stderr)
-        return 1
+        return failure_exit_status([exc])
     finally:
         if rf is not None and rf.poll() is None:
             rf.terminate()
