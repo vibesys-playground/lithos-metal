@@ -21,6 +21,7 @@ from replay_metrics import BUDGET_SECONDS, replay_window, summarize
 from vs_protocol import ResultWriter
 
 STARTUP_SECONDS = 1800
+CONTEXT_LIMITS = {"quick": 2048, "full": 32768}
 
 
 def main():
@@ -28,7 +29,7 @@ def main():
     parser.add_argument("--request-factory-engine", required=True)
     parser.add_argument("--vs-output", type=Path, required=True)
     parser.add_argument("--output-json", type=Path)
-    parser.add_argument("--workload", choices=("quick", "full"), default="full")
+    parser.add_argument("--workload", choices=tuple(CONTEXT_LIMITS), default="full")
     parser.add_argument("--gpu-lock-held", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
     if not args.gpu_lock_held:
@@ -61,7 +62,14 @@ def main():
         for name, digest in identity["files"].items():
             if hashlib.sha256((root / name).read_bytes()).hexdigest() != digest:
                 raise ValueError(f"Pinned RF replay input changed: {name}")
-        planned = list(csv.DictReader((root / f"{args.workload}.csv").open()))
+        with (root / f"{args.workload}.csv").open() as trace:
+            planned = list(csv.DictReader(trace))
+        max_context = CONTEXT_LIMITS[args.workload]
+        pool_limit = (
+            max(int(row["prefix_len"]) + int(row["input_len"]) for row in planned)
+            if args.workload == "quick"
+            else 2 * max_context
+        )
         with (
             tempfile.TemporaryDirectory(prefix="flint-rf-") as temp,
             contextlib.ExitStack() as owner,
@@ -71,7 +79,9 @@ def main():
             terminal = owner.enter_context((temporary / "terminal.log").open("w+"))
             with deadline_guard(STARTUP_SECONDS):
                 path = model_path()
-                url = owner.enter_context(server_endpoint(Path.cwd(), path))
+                url = owner.enter_context(
+                    server_endpoint(Path.cwd(), path, max_context=max_context)
+                )
                 command = [
                     args.request_factory_engine,
                     "--trace",
@@ -83,7 +93,7 @@ def main():
                     "--tokenizer",
                     str(path / "tokenizer.json"),
                     "--token-pool-limit",
-                    "1024" if args.workload == "quick" else "65536",
+                    str(pool_limit),
                     "--model",
                     "flint",
                     "--backend",
@@ -171,6 +181,8 @@ def main():
             values.update(startup_duration_s=startup, scored_duration_s=scored_duration)
             result = dict(
                 workload=args.workload,
+                max_context=max_context,
+                token_pool_limit=pool_limit,
                 candidate_commit=candidate_commit,
                 request_factory_engine_sha256=engine_sha256,
                 metrics=values,

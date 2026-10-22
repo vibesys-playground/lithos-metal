@@ -80,6 +80,22 @@ class LauncherTests(unittest.TestCase):
         cached = launch_argv(Path("checkpoint"), 1234, Path("shared-pack"))
         self.assertEqual(cached[-2:], ["--pack", "shared-pack"])
 
+    def test_bootstrap_capacity_changes_only_the_requested_context_limit(self):
+        full = launch_argv(Path("checkpoint"), 1234, Path("shared-pack"))
+        quick = launch_argv(
+            Path("checkpoint"), 1234, Path("shared-pack"), max_context=2048
+        )
+        position = full.index("--max-context") + 1
+        self.assertEqual(full[position], "32768")
+        self.assertEqual(quick[position], "2048")
+        quick[position] = "32768"
+        self.assertEqual(quick, full)
+        for invalid in (0, -1, 32769, True):
+            with self.assertRaises(ValueError):
+                launch_argv(
+                    Path("checkpoint"), 1234, Path("shared-pack"), max_context=invalid
+                )
+
 
 class PinTests(unittest.TestCase):
     def payload(self):

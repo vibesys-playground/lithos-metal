@@ -141,7 +141,11 @@ class HttpChat:
         return body
 
 
-def launch_argv(path: Path, port: int, pack_path: Path | None = None) -> list[str]:
+def launch_argv(
+    path: Path, port: int, pack_path: Path | None = None, *, max_context: int = 32768
+) -> list[str]:
+    if type(max_context) is not int or not 0 < max_context <= 32768:
+        raise ValueError("Serving max_context must be an integer in 1..32768")
     if pack_path is None:
         pack_path = resolve_pack(Path.cwd(), os.environ, Path.home())
     argv = [
@@ -159,7 +163,7 @@ def launch_argv(path: Path, port: int, pack_path: Path | None = None) -> list[st
         "--served-model-name",
         "flint",
         "--max-context",
-        "32768",
+        str(max_context),
         "--keep-warm",
         "0",
         "--host",
@@ -173,7 +177,7 @@ def launch_argv(path: Path, port: int, pack_path: Path | None = None) -> list[st
 
 
 @contextlib.contextmanager
-def server_endpoint(workspace: Path, path: Path):
+def server_endpoint(workspace: Path, path: Path, *, max_context: int = 32768):
     """Own one server process group, including startup failure and caller failure.
 
     Startup compilation is included in whole benchmark wall time. Temporary log
@@ -199,7 +203,7 @@ def server_endpoint(workspace: Path, path: Path):
                 probe.bind(("127.0.0.1", 0))
                 port = probe.getsockname()[1]
             proc = subprocess.Popen(
-                launch_argv(path, port, pack),
+                launch_argv(path, port, pack, max_context=max_context),
                 cwd=workspace,
                 stdout=log,
                 stderr=subprocess.STDOUT,

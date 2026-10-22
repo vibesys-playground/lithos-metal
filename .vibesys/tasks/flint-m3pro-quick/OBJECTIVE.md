@@ -68,9 +68,10 @@ bypasses chat framing during performance replay; accuracy still checks it.
 
 Two tasks share one adapter, launcher, read-only pack policy and accuracy gate:
 
-- `flint-m3pro-quick`: RF-generated synthetic session, three rounds, each
-  appending 256 prompt tokens and requesting 16 outputs. Full prompt lengths
-  are 256, 528 and 800 tokens. This is a bootstrap gradient, not a production
+- `flint-m3pro-quick`: RF-generated synthetic session, two rounds, each
+  appending 256 prompt tokens and requesting 32 outputs. Full prompt lengths
+  are 256 and 544 tokens. It uses 2048-token serving capacity; full replay
+  and the accuracy checker retain 32768-token capacity. This is a bootstrap gradient, not a production
   trace. It must complete all requests within the 600-second scored budget.
 - `flint-m3pro`: the first seven rounds of the first session in RF's bundled
   TraceLab execution-v2 example. Input/output lengths remain unchanged. Later
@@ -82,7 +83,7 @@ Both use `text-generation-session-execution-v2`, saturated arrival,
 reuse. Every `tool_wait_after_ms` is zero: tool time is compressed so the next
 round starts immediately after its predecessor. No concurrent users are added.
 RF's mandatory cache-telemetry probe runs before scored replay.
-Quick uses a 1024-token pool to bound that probe. The probe covers this small
+Quick uses a 544-token pool to bound that probe. The probe covers this small
 pool and can warm the first trace prompt; planned and actual cache hit rates
 remain separate diagnostics. Later rounds still add uncached tokens.
 
@@ -110,7 +111,8 @@ the two tasks are different experiments and must not be compared directly.
 
 ## Candidate contract
 
-The trusted launcher starts from the candidate repository root:
+The trusted launcher starts from the candidate repository root. This example
+shows full/accuracy capacity; quick supplies `--max-context 2048`:
 
 ```sh
 python3 -m monolith.serve --model "$FLINT_MODEL_PATH" \

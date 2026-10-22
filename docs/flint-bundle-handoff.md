@@ -12,7 +12,7 @@ bespoke `benchmark/core.py`, its streaming parser and workload-only tests were
 removed. Stale bespoke operator commands were removed from the task README.
 No inherited work was discarded without replacement or explanation.
 
-The branch includes `flint-model` through `6ed17d9`. Its changes remain owned
+The branch includes `flint-model` through `8ebfc3e`. Its changes remain owned
 by the port workstream. This continuation changes no `monolith/` implementation
 and requires no additional serving API extension. Existing raw-token
 Completions and truthful prefix-cache telemetry support RF directly.
@@ -28,9 +28,10 @@ The input schema has one `benchmark: BenchmarkCommand` and rejects unknown
 fields; it offers no list of benchmarks or staged benchmark selection.
 There are therefore two tasks:
 
-- `flint-m3pro-quick`: one RF-generated synthetic session with three rounds.
-  Each adds 256 prompt tokens and requests 16 output tokens. Full prompt
-  lengths are 256, 528 and 800 tokens. It is a cheap bootstrap gradient,
+- `flint-m3pro-quick`: one RF-generated synthetic session with two rounds.
+  Each adds 256 prompt tokens and requests 32 output tokens. Full prompt
+  lengths are 256 and 544 tokens, served with 2048-token capacity. Full replay
+  and the shared accuracy checker retain 32768-token capacity. It is a cheap bootstrap gradient,
   not evidence of representative coding traffic.
 - `flint-m3pro`: first seven rounds of session 0 from RF's bundled TraceLab
   execution-v2 example. Full prompts are 14438, 16159, 16687, 18049, 27031,
@@ -64,7 +65,7 @@ manifest reports 18579 folded prefix tokens across its complete source;
 that is source canonicalization metadata, not a measured cache hit here.
 
 Quick was generated through `launcher tracegen`, `generator.type: synthetic`,
-one session, three rounds, fixed input 256, output 16, no compaction, constant
+one session, two rounds, fixed input 256, output 32, no compaction, constant
 arrival rate 1 and seed 0. The pinned generator requires a positive tool-wait
 distribution, so generation used 1 ms followed by the same explicit zero-wait
 transformation as full. Full uses the already canonical RF bundled artifact;
@@ -82,13 +83,21 @@ checkpoint files. Performance uses raw-token Completions, bypassing chat
 framing; the independent accuracy checker still verifies chat framing.
 
 The corpus has enough distinct source text for the full 65536-token pool.
-Quick caps its pool at 1024 tokens, covering its largest 800-token prompt.
+Quick derives its 544-token pool from its largest prompt.
 RF's mandatory cache probe is bounded by that pool, so quick does not pay an
 8192-token probe. With the small quick pool the probe covers the entire pool
 and can warm the first trace prompt, so quick is explicitly a warm bootstrap.
 Later rounds still append uncached tokens. Full retains RF's normal tail probe
 of 8192 tokens from its larger pool. Neither probe is
 scored, but both are included in startup and whole wall time.
+
+The first calibration used three 256-input/16-output rounds and 32768 serving
+capacity. It completed 3/3 requests but took 501.2804 seconds overall, including
+262.2691 seconds startup and 238.6408 seconds scored replay. Its mean TTFT was
+74113.16 ms, mean TPOT 324.952 ms and mean decode speed 6.7562 tokens/s. This
+was too expensive for bootstrap. The current quick task replaces that shape
+with two rounds and bounded 2048 capacity; the calibration remains evidence,
+not the current bootstrap baseline. No full trace or accuracy threshold changed.
 
 ## Metrics and fixed budget
 
@@ -116,7 +125,7 @@ Every unfinished planned request, including not-yet-submitted rounds, gets
 `status=timed_out`, TTFT 600000 ms, TPOT 600000 ms and decode speed zero.
 Late completions during cleanup receive the same censoring. The denominator
 never shrinks. Completing more work improves the score. Quick must complete
-all three requests; a quick timeout is an invalid bootstrap measurement.
+both requests; a quick timeout is an invalid bootstrap measurement.
 
 Diagnostic `decode_tokens_per_second` is the planned-round mean of
 `1000 / token_delivery_tpot_ms`, with zero for censored rounds. The protocol
@@ -166,7 +175,7 @@ python3 "$RF_ADAPTER" --engine "$RF_ENGINE" -- \
 
 ## Verification and qualification
 
-29 hermetic task tests pass, covering the unchanged gate's injected wrong
+30 hermetic task tests pass, covering the unchanged gate's injected wrong
 output rejection, pack provenance, protocol v2, fixed denominators, late
 completion censoring, pre-deadline failures, summary mapping and asynchronous
 writer skew. Tests use deterministic RF-shaped records, injected timer/transport
