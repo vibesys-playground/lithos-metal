@@ -109,8 +109,15 @@ class TaskEnvTests(unittest.TestCase):
                     os.environ.pop("PATH", None)
                 else:
                     os.environ["PATH"] = previous
-            self.assertEqual(resolved, binary.resolve())
-            self.assertNotEqual(resolved, decoy.resolve())
+            self.assertEqual(resolved, binary)
+            self.assertNotEqual(resolved, decoy)
+            base = root / "base-python"
+            base.write_text("base")
+            base.chmod(0o755)
+            link = environment / "bin" / "python"
+            link.symlink_to(base)
+            self.assertEqual(tool_path(environment, "python"), link)
+            self.assertNotEqual(tool_path(environment, "python"), base)
 
     def test_uv_is_not_taken_from_path(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -154,8 +161,8 @@ class TaskEnvTests(unittest.TestCase):
             )
             self.assertNotIn("/vibesys/.venv", sync_env["PATH"])
             self.assertNotIn("VIRTUAL_ENV", sync_env)
-            self.assertEqual(prepared.python, (prepared.root / "bin" / "python").resolve())
-            self.assertEqual(prepared.cmake, (prepared.root / "bin" / "cmake").resolve())
+            self.assertEqual(prepared.python, prepared.root / "bin" / "python")
+            self.assertEqual(prepared.cmake, prepared.root / "bin" / "cmake")
             self.assertNotEqual(prepared.root, home / ".cache" / "huggingface")
             configure, compile_command = native_build_commands(project, prepared)
             self.assertEqual(configure[0], str(prepared.cmake))
@@ -210,8 +217,8 @@ class TaskEnvTests(unittest.TestCase):
             decoy.write_text("decoy")
             decoy.chmod(0o755)
             prepared = load_prepared(project, home)
-            self.assertEqual(prepared.cmake, cmake.resolve())
-            self.assertNotEqual(prepared.cmake, decoy.resolve())
+            self.assertEqual(prepared.cmake, cmake)
+            self.assertNotEqual(prepared.cmake, decoy)
             require_current_interpreter(python, prepared)
             other_home_project = self.project(root / "second", b"other-lock")
             partial = environment_root(home, b"other-lock") / "bin"

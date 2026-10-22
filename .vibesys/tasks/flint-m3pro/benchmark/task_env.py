@@ -102,11 +102,16 @@ def missing_tool_message(name: str, path: Path) -> str:
 
 
 def tool_path(environment: Path, name: str) -> Path:
-    """Return environment/bin/name, or raise. Never consults PATH."""
+    """Return environment/bin/name, or raise. Never consults PATH.
+
+    The path is not symlink-resolved. A venv ``python`` is a symlink to the
+    base interpreter, and executing that target drops the environment's
+    site-packages.
+    """
     path = Path(environment) / "bin" / name
     if not path.is_file() or not os.access(path, os.X_OK):
         raise MissingToolError(missing_tool_message(name, path))
-    return path.resolve()
+    return path if path.is_absolute() else path.absolute()
 
 
 def uv_search_paths(home: Path, environ: dict[str, str]) -> tuple[Path, ...]:
@@ -171,7 +176,9 @@ def load_prepared(project: Path, home: Path) -> Prepared:
 
 
 def require_current_interpreter(current: Path, prepared: Prepared) -> None:
-    if Path(current).resolve() != prepared.python.resolve():
+    # Compare the venv path, not its symlink target. The base interpreter is
+    # not this environment.
+    if Path(current) != prepared.python:
         raise TaskEnvironmentError(
             f"Refusing to build with {current}. The task interpreter is {prepared.python}. "
             "Run .vibesys/tasks/flint-m3pro/setup_env.sh and use the interpreter it prints. "
@@ -256,7 +263,7 @@ def enter_task_environment() -> None:
     except TaskEnvironmentError as exc:
         print(exc, file=sys.stderr)
         raise SystemExit(1) from exc
-    if Path(sys.executable).resolve() == prepared.python.resolve():
+    if Path(sys.executable) == prepared.python or Path(sys.prefix) == prepared.root:
         os.environ[_ACTIVE] = "1"
         return
     os.environ[_ACTIVE] = "1"
