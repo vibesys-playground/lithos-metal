@@ -452,6 +452,159 @@
       "optimization_qualified": false,
       "process_cleanup": "owned RF, benchmark and server exited; lock passed to revised quick run",
       "configuration_note": "Measured before quick-only 2048-capacity retuning; full trace, full launch arguments, RF and scoring policy unchanged."
+    },
+    {
+      "id": "rf-quick-2x256-32-context2048",
+      "engine_commit": "cfcf5b0e3a6bea0804908826f767a836e502e824",
+      "rf_commit": "89dce4a64ae12e7084fbe464ddda882fa0a4c482",
+      "rf_engine_sha256": "a24d8c85a1e106dbe186e119957744abc71edd8b5d76544787827e0a15c88774",
+      "trace_sha256": "69d7e45a45195a0acc0512a3d7dd854300b6ff27eae1814ed052ec1c6cb0618e",
+      "status": "completed_all_requests",
+      "max_context": 2048,
+      "token_pool_limit": 544,
+      "metrics": {
+        "ttft_ms_avg": 35197.83,
+        "tpot_ms_avg": 55.031774193548344,
+        "decode_tokens_per_second": 18.20908837583103,
+        "completed_requests": 2,
+        "timed_out_requests": 0,
+        "startup_duration_s": 200.77671909332275,
+        "scored_duration_s": 74.19734001159668
+      },
+      "total_wall_duration_s": 275.1682947500085,
+      "wall_time_note": "Includes startup and owned-server cleanup; excludes GPU lock queue.",
+      "rf_summary": {
+        "workload": {
+          "kind": "sessions",
+          "sessions": 1,
+          "rounds": 2,
+          "first_context_overflow_round_idx": null,
+          "first_context_overflow_prompt_len": null,
+          "first_context_overflow_requested_total_len": null,
+          "max_prompt_len": 544,
+          "max_prefix_len": 288,
+          "max_input_len": 256,
+          "max_output_len": 32,
+          "total_output_len": 64,
+          "max_arrival_time_ms": 0.0,
+          "total_tool_wait_after_ms": 0.0
+        },
+        "replay": {
+          "kind": "sessions",
+          "common": {
+            "attempted_steps": 2,
+            "success_steps": 2,
+            "failed_steps": 0,
+            "target_output_tokens": 64,
+            "actual_output_tokens": 64,
+            "output_mismatch_steps": 0,
+            "output_token_delta": 0,
+            "total_duration_ms_sum": 73866.86,
+            "total_duration_ms_avg": 36933.43,
+            "total_duration_ms_p50": 36933.43,
+            "total_duration_ms_p90": 40645.854,
+            "total_duration_ms_max": 41573.96,
+            "ttft_ms_avg": 35197.83,
+            "ttft_ms_p50": 35197.83,
+            "ttft_ms_p90": 38849.79,
+            "ttft_ms_max": 39762.78,
+            "ttft_token_id_steps": 2,
+            "ttft_text_fallback_steps": 0,
+            "run_duration_ms": 73867.61713027954,
+            "request_throughput_per_s": 0.027075463886598927,
+            "output_token_throughput_per_s": 0.8664148443711657,
+            "output_bytes": 306,
+            "output_byte_throughput_per_s": 4.142545974649636,
+            "media_output_steps": 0,
+            "first_output_ms_avg": 35197.83,
+            "first_output_ms_p50": 35197.83,
+            "first_output_ms_p90": 38849.79,
+            "first_output_ms_max": 39762.78,
+            "audio_duration_s": 0.0,
+            "audio_throughput_s_per_s": 0.0,
+            "real_time_factor_measured_steps": 0,
+            "real_time_factor_avg": null,
+            "real_time_factor_p50": null,
+            "real_time_factor_p90": null,
+            "real_time_factor_max": null,
+            "tpot_measured_steps": 2,
+            "tpot_ms_avg": 55.031774193548344,
+            "tpot_ms_p50": 55.031774193548344,
+            "tpot_ms_p90": 57.036806451612904,
+            "tpot_ms_max": 57.53806451612904,
+            "completion_amortized_tpot_measured_steps": 2,
+            "completion_amortized_tpot_ms_avg": 55.98709677419356,
+            "completion_amortized_tpot_ms_p50": 55.98709677419356,
+            "completion_amortized_tpot_ms_p90": 57.93754838709679,
+            "completion_amortized_tpot_ms_max": 58.42516129032259,
+            "context_overflow_steps": 0
+          },
+          "prefix_cache": {
+            "planned_prefix_tokens": 288,
+            "planned_prompt_tokens": 800,
+            "planned_prefix_hit_rate": 0.36,
+            "measured_cache_steps": 2,
+            "measured_server_cached_prompt_tokens": 255,
+            "measured_server_prompt_tokens": 800,
+            "planned_prefix_tokens_for_measured_cache_steps": 288,
+            "planned_prompt_tokens_for_measured_cache_steps": 800,
+            "planned_prefix_hit_rate_for_measured_cache_steps": 0.36,
+            "server_prefix_hit_rate": 0.31875,
+            "server_prefix_hit_rate_delta": -0.04125000000000001
+          }
+        },
+        "client_runtime": {
+          "tokio_worker_threads": 1,
+          "sampled_global_queue_depth_peak": 0
+        },
+        "timeline": {
+          "path": null,
+          "requests_written": 0,
+          "events_written": 0,
+          "dropped_requests": 0
+        },
+        "slo": null
+      },
+      "completed_turns": [
+        {
+          "request_id": "session_synthetic_000000_round_000000",
+          "status": "completed",
+          "censored": false,
+          "ttft_ms": 30632.88,
+          "tpot_ms": 52.525483870967655,
+          "decode_tokens_per_second": 19.03837768456482,
+          "server_usage": {
+            "prompt_tokens": 256,
+            "completion_tokens": 32,
+            "total_tokens": 288,
+            "cached_prompt_tokens": 0,
+            "uncached_prompt_tokens": 256,
+            "prefix_hit_rate": 0.0
+          },
+          "output_len_actual": 32
+        },
+        {
+          "request_id": "session_synthetic_000000_round_000001",
+          "status": "completed",
+          "censored": false,
+          "ttft_ms": 39762.78,
+          "tpot_ms": 57.53806451612904,
+          "decode_tokens_per_second": 17.379799067097235,
+          "server_usage": {
+            "prompt_tokens": 544,
+            "completion_tokens": 32,
+            "total_tokens": 576,
+            "cached_prompt_tokens": 255,
+            "uncached_prompt_tokens": 289,
+            "prefix_hit_rate": 0.46875
+          },
+          "output_len_actual": 32
+        }
+      ],
+      "protocol_result_emitted": true,
+      "protocol_parser_failure": null,
+      "optimization_qualified": false,
+      "process_cleanup": "owned RF, benchmark and server exited; GPU lock released"
     }
   ]
 }

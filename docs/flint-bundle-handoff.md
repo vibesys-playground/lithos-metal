@@ -1,6 +1,6 @@
 # Flint M3 Pro bundle operator handoff
 
-Updated 2026-10-21 (America/Los_Angeles). No optimization agents have been
+Updated 2026-10-21 PDT (2026-10-22 UTC). No optimization agents have been
 launched. Accuracy qualification is still pending in the port workstream.
 
 ## Enforced accuracy gate and starting eligibility
@@ -16,14 +16,15 @@ Both `flint-m3pro-quick` and `flint-m3pro` invoke the identical
 lock, with an 1800-second accuracy timeout. Both retain the schema's enforced
 `benchmark.requires_accuracy=true` default. The checker enforces:
 
-- The serving-source audit and pinned checkpoint/tokenizer/template provenance.
+- The mechanical serving-source audit and pinned checkpoint/tokenizer/template provenance.
 - Four semantic probes: arithmetic, Python list length and two conversation
   recall cases. Each asks for at most 64 tokens and checks its fixed regex.
 - Exactly four current reference pins: `port-1`, `port-2`, `code-0`, `code-1`.
   Each requests exactly 32 greedy tokens and must match every raw token ID,
   the 32-token usage count and the pinned visible text. Prompt token IDs must
-  match the pinned chat template. All four pins run twice, in forward and
-  reverse order, with no tolerance or short-output allowance.
+  match the pinned chat template. Every pin must pass in forward and
+  reverse order; the check stops at the first failure. There is no tolerance
+  or short-output allowance.
 
 The latest recorded real check passed all four semantic probes and `port-1`,
 then failed `port-2` at zero-based token **22**, expected **3087**, actual
@@ -120,8 +121,9 @@ The corpus has enough distinct source text for the full 65536-token pool.
 Quick derives its 544-token pool from its largest prompt.
 RF's mandatory cache probe is bounded by that pool, so quick does not pay an
 8192-token probe. With the small quick pool the probe covers the entire pool
-and can warm the first trace prompt, so quick is explicitly a warm bootstrap.
-Later rounds still append uncached tokens. Full retains RF's normal tail probe
+and can warm the first trace prompt on engines able to reuse shorter cached
+prefixes. Actual reuse is reported rather than assumed: the current measured
+first request is cold. Later rounds still append uncached tokens. Full retains RF's normal tail probe
 of 8192 tokens from its larger pool. Neither probe is
 scored, but both are included in startup and whole wall time.
 
@@ -167,6 +169,28 @@ also reports completion/timeout counts, startup and scored duration. The JSON
 sidecar preserves every planned outcome, RF's raw records, full summary and
 input identity, including planned and measured prefix-cache statistics.
 Accuracy remains an independent hard gate.
+
+## Real RF quick measurement
+
+The final quick configuration at candidate `cfcf5b0` completes **2/2 requests**,
+**64/64 output tokens**, with **no failures or timeouts**, in **275.1683 seconds**
+whole wall time (4.59 minutes), excluding the GPU lock queue. Startup is
+**200.7767 seconds** and scored replay is **74.1973 seconds**, below its
+600-second budget. Its observed metrics are:
+
+- `ttft_ms_avg`: **35197.83 ms**.
+- `tpot_ms_avg`: **55.031774 ms/token**.
+- `decode_tokens_per_second`: **18.209088 tokens/s**, averaging per-round rates.
+
+Planned prefix hit rate is **36.0%**; server-measured rate is **31.875%**
+(255 cached tokens across 800 prompt tokens). The first request reports zero
+cached tokens, the second 255. RF reports zero output mismatches and zero
+telemetry drops. The real VibeSys protocol parser accepts the row without a
+failure. The owned RF, benchmark and server processes have exited.
+
+This is the current bootstrap baseline. The earlier three-round, 32k-capacity
+calibration is a different benchmark configuration; its rates must not be
+interpreted as an engine speedup comparison with this one.
 
 ## Real RF full measurement
 
@@ -265,7 +289,13 @@ received 220. No threshold was loosened. The port's long-context frozen gate
 is still pending; performance diagnostics alone do not qualify a candidate.
 
 [Structured measurements](flint-bundle-measurements.json) retain historical
-observations and RF results as they complete. Finish the revised quick measurement, merge
-new port commits when published, then advance the VibeSys submodule pointer
-and merge/push the experiment normally. Do not launch optimization agents
-until the independent accuracy gate qualifies the port.
+observations, the superseded calibration and both final RF configurations.
+Both requested real benchmarks have completed, and both protocol rows parse.
+No RF change was needed, no weights or packs were copied, and all owned model
+servers and benchmark processes have exited. Both configuration preflights
+pass; the exact-pin accuracy gate still fails and blocks an optimization run.
+
+The next accuracy step belongs to the separate port workstream: provide its
+pinned, frozen teacher-forced threshold file and an explicit follow-up to wire
+it into the shared checker. Until then both tasks continue to enforce the
+unchanged exact 32-token pins. No optimization agents have been launched.
