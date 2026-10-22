@@ -214,17 +214,11 @@ def _reject_layout(project: Path, home: Path, root: Path) -> None:
     pack = Path(home) / ".cache" / "lithos-metal" / "flint-int4"
     weights = Path(home) / ".cache" / "huggingface"
     if root == project or project in root.parents or root in project.parents:
-        raise TaskEnvironmentError(
-            "The task environment must stay outside the candidate checkout."
-        )
+        raise TaskEnvironmentError("The task environment must stay outside the candidate checkout.")
     if root in pack.parents or pack in root.parents or root == pack:
-        raise TaskEnvironmentError(
-            "The task environment must not contain the shared pack."
-        )
+        raise TaskEnvironmentError("The task environment must not contain the shared pack.")
     if root in weights.parents or weights in root.parents or root == weights:
-        raise TaskEnvironmentError(
-            "The task environment must not contain the weight snapshot."
-        )
+        raise TaskEnvironmentError("The task environment must not contain the weight snapshot.")
 
 
 def prepare(
@@ -233,7 +227,16 @@ def prepare(
     runner: CommandRunner,
     base_env: dict[str, str],
 ) -> Prepared:
-    """Run check_host.sh, then one locked sync of this candidate's lock."""
+    """Validate the host and select the exact lock's environment.
+
+    FLINT_TASK_ENV_MODE=prepared is read-only and never invokes uv or locks.
+    The default sync mode remains the trusted setup/evaluation path.
+    """
+    mode = base_env.get("FLINT_TASK_ENV_MODE", "sync")
+    if mode not in {"sync", "prepared"}:
+        raise TaskEnvironmentError(
+            f"Invalid FLINT_TASK_ENV_MODE={mode!r}; expected sync or prepared."
+        )
     project = Path(project).resolve()
     home = Path(home)
     check_code = runner.run(check_host_argv(project), dict(base_env))
@@ -247,6 +250,17 @@ def prepare(
         raise FrozenLockError(frozen_failure_message(lock_path))
     root = environment_root(home, lock_path.read_bytes())
     _reject_layout(project, home, root)
+    if mode == "prepared":
+        try:
+            return load_prepared(project, home)
+        except MissingToolError as exc:
+            raise TaskEnvironmentError(
+                f"Operator setup required for uv.lock {root.name}: {exc} "
+                "Outside agent confinement, run "
+                "`FLINT_TASK_ENV_MODE=sync .vibesys/tasks/flint-m3pro/setup_env.sh` "
+                "in this candidate checkout, then retry with FLINT_TASK_ENV_MODE=prepared. "
+                "Prepared mode never creates or repairs the shared environment."
+            ) from exc
     uv = locate_uv(home, base_env)
     code = runner.run(sync_argv(uv, project), sync_environment(base_env, root))
     if code != 0:

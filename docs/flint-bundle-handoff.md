@@ -322,11 +322,12 @@ macOS Seatbelt allows the agent to read and execute that cache: reads are
 broad, `process-exec` and `file-map-executable` are allowed, and a candidate
 worktree's two denied ancestors sit inside the project, not over
 `$HOME/.cache`. Writes are denied outside the worktree, so `uv sync` cannot
-create or refresh the cache from inside the agent confinement. That needs a
-VibeSys write allowance for `$HOME/.cache/lithos-metal/task-env` and
-`$HOME/.cache/uv`. No allowance was added. The evaluator command is separate
-and can create the environment; after it exists the agent can read and
-execute it.
+create or refresh the cache from inside the agent confinement. Use `FLINT_TASK_ENV_MODE=prepared` for confined probes after trusted
+operator setup. This validates host prerequisites and loads the exact lockfile
+cache without invoking uv or writing shared caches. Missing environments fail
+with an operator-setup instruction. The default sync path remains unchanged
+for trusted setup and evaluation. See the task README for the warm 16/544-token
+TTFT probe entrypoint. No cache write allowance was added.
 
 The request-factory adapter starts `benchmark/run.py` on the evaluator's
 interpreter. That file switches to `bin/python` before it imports the task

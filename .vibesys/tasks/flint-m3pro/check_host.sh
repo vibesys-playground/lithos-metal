@@ -3,8 +3,15 @@
 # fix it, then exits nonzero. No package install and no PATH lookup.
 set -u
 
-HERE=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
-ROOT=$(CDPATH= cd -- "$HERE/../../.." && pwd)
+TASK_PATH=$(dirname "$0")
+HERE=$(CDPATH= cd -- "$TASK_PATH" && pwd) || {
+  printf 'Cannot enter task directory: %s\n' "$TASK_PATH" >&2
+  exit 1
+}
+ROOT=$(CDPATH= cd -- "$HERE/../../.." && pwd) || {
+  printf 'Cannot resolve project root for task directory: %s\n' "$HERE" >&2
+  exit 1
+}
 failures=""
 
 note() {
@@ -61,7 +68,7 @@ else
   snapshot="$hub/models--RecursiveSI--flint-int4/snapshots/3b93f9053b530488405ae9fca51d4900d6ce21f0"
 fi
 
-if ! weight_note=$(/usr/bin/python3 - "$snapshot" "$HERE/reference/checkpoint.json" <<'PY'
+if ! weight_note=$(/usr/bin/python3 - "$snapshot" "$HERE/reference/checkpoint.json" 2>&1 <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -103,7 +110,7 @@ fix: point FLINT_PACK_DIR at the existing shared pack. The task does not copy or
     ;;
 esac
 
-if ! pack_note=$(/usr/bin/python3 - "$pack" <<'PY'
+if ! pack_note=$(/usr/bin/python3 - "$pack" 2>&1 <<'PY'
 import hashlib
 import json
 import sys

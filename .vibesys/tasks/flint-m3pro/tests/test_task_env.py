@@ -25,7 +25,6 @@ from task_env import (
     prepare,
     require_current_interpreter,
     sync_argv,
-    sync_environment,
     tool_path,
 )
 
@@ -180,6 +179,72 @@ class TaskEnvTests(unittest.TestCase):
                 prepare(project, root / "home", runner, {})
             self.assertIn("check_host.sh", str(caught.exception))
             self.assertEqual(len(runner.calls), 1)
+
+    def test_prepared_mode_checks_host_without_sync_or_cache_writes(self):
+        for lock in (b"lock-v1\n", b"another-lock", b"\x00lock"):
+            with self.subTest(lock=lock), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                project = self.project(root, lock)
+                home = root / "home"
+                environment = environment_root(home, lock)
+                bindir = environment / "bin"
+                bindir.mkdir(parents=True)
+                for name in ("python", "cmake"):
+                    tool = bindir / name
+                    tool.write_text("#!/bin/sh\n")
+                    tool.chmod(0o555)
+                before = {
+                    p.relative_to(home): p.read_bytes() for p in home.rglob("*") if p.is_file()
+                }
+                runner = FakeRunner()
+                prepared = prepare(project, home, runner, {"FLINT_TASK_ENV_MODE": "prepared"})
+                self.assertEqual(prepared.root, environment)
+                self.assertEqual(
+                    [call[0] for call in runner.calls], [check_host_argv(project.resolve())]
+                )
+                self.assertEqual(
+                    before,
+                    {p.relative_to(home): p.read_bytes() for p in home.rglob("*") if p.is_file()},
+                )
+                (project / "uv.lock").write_bytes(lock + b"changed")
+                with self.assertRaisesRegex(Exception, "Operator setup required"):
+                    prepare(project, home, runner, {"FLINT_TASK_ENV_MODE": "prepared"})
+                self.assertEqual(len(runner.calls), 2)
+
+    def test_prepared_mode_rejects_partial_environment_and_host_failure(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            project = self.project(root)
+            home = root / "home"
+            for absent in ("python", "cmake"):
+                environment = environment_root(home, b"lock-v1\n") / "bin"
+                environment.mkdir(parents=True, exist_ok=True)
+                for name in ("python", "cmake"):
+                    tool = environment / name
+                    if tool.exists():
+                        tool.unlink()
+                    tool.write_text("#!/bin/sh\n")
+                    tool.chmod(0o555)
+                (environment / absent).unlink()
+                runner = FakeRunner()
+                with self.assertRaisesRegex(Exception, "Operator setup required") as caught:
+                    prepare(project, home, runner, {"FLINT_TASK_ENV_MODE": "prepared"})
+                self.assertIn(absent, str(caught.exception))
+                self.assertEqual(len(runner.calls), 1)
+            runner = FakeRunner(host_code=1)
+            with self.assertRaises(HostCheckError):
+                prepare(project, home, runner, {"FLINT_TASK_ENV_MODE": "prepared"})
+            self.assertEqual(len(runner.calls), 1)
+
+    def test_unknown_environment_mode_fails_before_any_command(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            project = self.project(root)
+            for mode in ("", "readonly", "PREPARED"):
+                runner = FakeRunner()
+                with self.assertRaisesRegex(Exception, "FLINT_TASK_ENV_MODE"):
+                    prepare(project, root / "home", runner, {"FLINT_TASK_ENV_MODE": mode})
+                self.assertEqual(runner.calls, [])
 
     def test_stale_lock_fails_with_a_commit_message(self):
         with tempfile.TemporaryDirectory() as temp:
