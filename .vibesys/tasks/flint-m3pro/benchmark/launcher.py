@@ -176,7 +176,7 @@ def launch_argv(path: Path, port: int, pack_path: Path | None = None) -> list[st
 def server_endpoint(workspace: Path, path: Path):
     """Own one server process group, including startup failure and caller failure.
 
-    Startup compilation/packing is outside benchmark wall time. Temporary log
+    Startup compilation is included in whole benchmark wall time. Temporary log
     content is surfaced on failure, then removed; no machine paths are saved.
     """
     pack = resolve_pack(workspace, os.environ, Path.home())

@@ -21,6 +21,7 @@ class ReplayMetricsTests(unittest.TestCase):
                 token_delivery_tpot_ms=100,
                 complete_timestamp=10 + n,
                 error=None,
+                status="SUCCESS",
                 **changes,
             )
         }
@@ -89,3 +90,71 @@ class ReplayMetricsTests(unittest.TestCase):
         for records in ([], [self.record(0), self.record(0)]):
             with self.assertRaises(ValueError):
                 summarize(self.planned, records)
+
+
+class SummaryMappingTests(unittest.TestCase):
+    planned = ReplayMetricsTests.planned
+    record = ReplayMetricsTests.record
+
+    def summary(self):
+        return {
+            "replay": {
+                "kind": "sessions",
+                "common": {
+                    "attempted_steps": 3,
+                    "success_steps": 3,
+                    "failed_steps": 0,
+                    "output_mismatch_steps": 0,
+                    "ttft_ms_avg": 50,
+                    "tpot_ms_avg": 100,
+                },
+            }
+        }
+
+    def test_metrics_are_taken_from_validated_rf_summary(self):
+        values, _ = summarize(
+            self.planned, [self.record(n) for n in range(3)], rf_summary=self.summary()
+        )
+        self.assertEqual(values["ttft_ms_avg"], 50)
+        self.assertEqual(values["tpot_ms_avg"], 100)
+        for field, bad in [
+            ("ttft_ms_avg", 51),
+            ("tpot_ms_avg", 99),
+            ("failed_steps", 1),
+            ("output_mismatch_steps", 1),
+            ("attempted_steps", 2),
+        ]:
+            summary = self.summary()
+            summary["replay"]["common"][field] = bad
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                summarize(
+                    self.planned, [self.record(n) for n in range(3)], rf_summary=summary
+                )
+
+    def test_timeout_requires_deadline_and_rejects_invalid_timestamps(self):
+        for options in [
+            dict(timed_out=True),
+            dict(deadline_timestamp=20),
+            dict(timed_out=True, deadline_timestamp=math.nan),
+        ]:
+            with self.assertRaises(ValueError):
+                summarize(self.planned, [], **options)
+        for bad in [math.nan, math.inf, True, None]:
+            record = self.record(0)
+            record["outcome"]["complete_timestamp"] = bad
+            with self.assertRaises(ValueError):
+                summarize(self.planned, [record], timed_out=True, deadline_timestamp=20)
+
+    def test_only_failure_crossing_deadline_is_censored(self):
+        record = self.record(0)
+        record["outcome"].update(
+            error="stream closed", complete_timestamp=21, status="FAILED"
+        )
+        values, rows = summarize(
+            self.planned, [record], timed_out=True, deadline_timestamp=20
+        )
+        self.assertEqual(values["timed_out_requests"], 3)
+        self.assertEqual(rows[0]["status"], "timed_out")
+        record["outcome"]["complete_timestamp"] = 20
+        with self.assertRaises(ValueError):
+            summarize(self.planned, [record], timed_out=True, deadline_timestamp=20)

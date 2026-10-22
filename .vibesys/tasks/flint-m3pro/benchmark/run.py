@@ -75,6 +75,8 @@ def main():
                     str(root / "corpus.txt"),
                     "--tokenizer",
                     str(path / "tokenizer.json"),
+                    "--token-pool-limit",
+                    "1024" if args.workload == "quick" else "65536",
                     "--model",
                     "flint",
                     "--backend",
@@ -116,8 +118,11 @@ def main():
                         )
                     time.sleep(0.02)
             startup = time.monotonic() - started
-            scored = time.monotonic()
-            deadline_timestamp = time.time() + BUDGET_SECONDS
+            # macOS records file birth time when RF opens its request log, just
+            # before replay. Include polling delay in the fixed scored budget.
+            replay_started = log.stat().st_birthtime
+            deadline_timestamp = replay_started + BUDGET_SECONDS
+            remaining = max(0, deadline_timestamp - time.time())
             print(
                 json.dumps(
                     {"startup_duration_s": startup, "scored_budget_s": BUDGET_SECONDS}
@@ -126,14 +131,14 @@ def main():
             )
             timed_out = False
             try:
-                rf.wait(timeout=BUDGET_SECONDS)
+                rf.wait(timeout=remaining)
             except subprocess.TimeoutExpired:
                 timed_out = True
                 # Closing our server ends the in-flight HTTP request. RF then
                 # flushes its own buffered completed-request log and summary.
                 owner.close()
                 rf.wait(timeout=30)
-            scored_duration = min(time.monotonic() - scored, BUDGET_SECONDS)
+            scored_duration = min(time.time() - replay_started, BUDGET_SECONDS)
             if rf.returncode != 0:
                 raise RuntimeError(f"RF exited {rf.returncode}")
             records = [json.loads(line) for line in log.read_text().splitlines()]
@@ -141,15 +146,19 @@ def main():
             values, turns = summarize(
                 planned,
                 records,
+                rf_summary=rf_summary,
                 timed_out=timed_out,
                 deadline_timestamp=deadline_timestamp if timed_out else None,
             )
+            if args.workload == "quick" and values["timed_out_requests"]:
+                raise ValueError("Bootstrap must complete every planned request")
             values.update(startup_duration_s=startup, scored_duration_s=scored_duration)
             result = dict(
                 metrics=values,
                 turns=turns,
                 timed_out=timed_out,
                 rf_summary=rf_summary,
+                rf_records=records,
                 identity=identity,
                 total_wall_duration_s=time.monotonic() - started,
             )
